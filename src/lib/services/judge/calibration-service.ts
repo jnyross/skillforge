@@ -116,18 +116,22 @@ export async function runCalibration(
     },
   })
 
-  // If agreement rate is high enough, mark judge as calibrated
-  if (agreementRate >= 0.7 && total >= 5) {
-    await prisma.judgeDefinition.update({
-      where: { id: judge.id },
-      data: { status: 'calibrated' },
-    })
-  } else if (agreementRate < 0.7) {
-    // Keep as candidate if not calibrated enough
-    await prisma.judgeDefinition.update({
-      where: { id: judge.id },
-      data: { status: 'candidate' },
-    })
+  // Only auto-promote if judge is in draft or candidate status (respects lifecycle).
+  // Never resurrect a deprecated judge or re-promote an already calibrated one.
+  const currentJudge = await prisma.judgeDefinition.findUnique({ where: { id: judge.id } })
+  if (currentJudge && (currentJudge.status === 'draft' || currentJudge.status === 'candidate')) {
+    if (agreementRate >= 0.7 && total >= 5) {
+      await prisma.judgeDefinition.update({
+        where: { id: judge.id },
+        data: { status: 'calibrated' },
+      })
+    } else {
+      // Move to candidate if not yet calibrated enough
+      await prisma.judgeDefinition.update({
+        where: { id: judge.id },
+        data: { status: 'candidate' },
+      })
+    }
   }
 }
 

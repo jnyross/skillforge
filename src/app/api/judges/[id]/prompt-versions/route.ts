@@ -44,20 +44,22 @@ export async function POST(
   })
   const nextVersion = (latestVersion?.version ?? 0) + 1
 
-  // Deactivate all existing versions
-  await prisma.judgePromptVersion.updateMany({
-    where: { judgeId: params.id },
-    data: { active: false },
-  })
+  // Deactivate all existing versions and create new one atomically
+  const promptVersion = await prisma.$transaction(async (tx) => {
+    await tx.judgePromptVersion.updateMany({
+      where: { judgeId: params.id },
+      data: { active: false },
+    })
 
-  const promptVersion = await prisma.judgePromptVersion.create({
-    data: {
-      judgeId: params.id,
-      version: nextVersion,
-      systemPrompt: systemPrompt || '',
-      userPromptTemplate: userPromptTemplate || '',
-      active: true,
-    },
+    return tx.judgePromptVersion.create({
+      data: {
+        judgeId: params.id,
+        version: nextVersion,
+        systemPrompt: systemPrompt || '',
+        userPromptTemplate: userPromptTemplate || '',
+        active: true,
+      },
+    })
   })
 
   return NextResponse.json(promptVersion, { status: 201 })
