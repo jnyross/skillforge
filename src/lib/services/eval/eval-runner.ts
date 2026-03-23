@@ -305,14 +305,15 @@ async function executeTriggerCase(
       })
 
       const detection = detectTrigger(output.result)
+
+      // Create trace before pushing to runs so failure doesn't cause duplicate entry
+      await createTrace(evalRunId, evalCase.id, output, workspacePath)
+
       runs.push({
         triggered: detection.triggered,
         confidence: detection.confidence,
         durationMs: output.durationMs,
       })
-
-      // Create trace for this run
-      await createTrace(evalRunId, evalCase.id, output, workspacePath)
     } catch (err) {
       runs.push({
         triggered: false,
