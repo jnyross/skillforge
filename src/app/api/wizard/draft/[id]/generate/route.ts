@@ -45,16 +45,16 @@ export async function POST(
 
     // Determine mode from artifacts
     let mode: WizardMode = 'scratch'
-    const hasArtifacts = artifacts.length > 0
 
-    // Check for conversation-type artifacts
+    // Check for conversation-type artifacts vs non-conversation artifacts
     const hasConversations = artifacts.some(a => a.type === 'other' && a.name.toLowerCase().includes('conversation'))
+    const hasNonConversationArtifacts = artifacts.some(a => !(a.type === 'other' && a.name.toLowerCase().includes('conversation')))
 
-    if (hasConversations && hasArtifacts) {
+    if (hasConversations && hasNonConversationArtifacts) {
       mode = 'hybrid'
     } else if (hasConversations) {
       mode = 'extract'
-    } else if (hasArtifacts) {
+    } else if (hasNonConversationArtifacts) {
       mode = 'synthesize'
     }
 

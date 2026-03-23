@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { initSkillGitRepo, createVersion } from '@/lib/services/git-storage'
-import path from 'path'
-
-const DATA_DIR = process.env.DATA_DIR || './data/skill-repos'
 
 /**
  * POST /api/wizard/draft/:id/save
@@ -58,7 +55,15 @@ export async function POST(
     const skillName = body.repoName || (nameMatch ? nameMatch[1].trim().replace(/^["']|["']$/g, '') : `wizard-skill-${Date.now()}`)
     const slug = skillName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
     const displayName = skillName.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
-    const repoPath = path.resolve(DATA_DIR, slug)
+
+    // Check for duplicate slug
+    const existingRepo = await prisma.skillRepo.findUnique({ where: { slug } })
+    if (existingRepo) {
+      return NextResponse.json(
+        { error: `A skill repo with slug "${slug}" already exists` },
+        { status: 409 }
+      )
+    }
 
     // 1. Create skill repo
     const repo = await prisma.skillRepo.create({
@@ -66,12 +71,16 @@ export async function POST(
         slug,
         displayName,
         description: body.repoDescription || draft.intent.slice(0, 500) || 'Created by SkillForge Wizard',
-        gitRepoPath: repoPath,
+        gitRepoPath: '', // Will be set after git init
       },
     })
 
-    // 2. Initialize git repo
-    await initSkillGitRepo(repoPath)
+    // 2. Initialize git repo (pass repo.id, returns full path)
+    const repoPath = await initSkillGitRepo(repo.id)
+    await prisma.skillRepo.update({
+      where: { id: repo.id },
+      data: { gitRepoPath: repoPath },
+    })
 
     // 3. Prepare files for the initial version
     const files: Array<{ path: string; content: string; size: number }> = [

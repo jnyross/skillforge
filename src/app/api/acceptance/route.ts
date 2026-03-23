@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+// Force dynamic rendering — this route queries the database
+export const dynamic = 'force-dynamic'
+
 /**
  * GET /api/acceptance
  * Returns acceptance dashboard metrics — summary of all SkillForge subsystems.
@@ -33,7 +36,7 @@ export async function GET() {
   ])
 
   // Get latest eval run stats
-  const latestRuns = await prisma.evalRun.findMany({
+  const latestRunsRaw = await prisma.evalRun.findMany({
     take: 5,
     orderBy: { createdAt: 'desc' },
     select: {
@@ -43,6 +46,15 @@ export async function GET() {
       createdAt: true,
       executorType: true,
     },
+  })
+
+  const latestRuns = latestRunsRaw.map(r => {
+    let passRate: number | null = null
+    try {
+      const metrics = JSON.parse(r.metricsJson || '{}')
+      if (typeof metrics.passRate === 'number') passRate = metrics.passRate
+    } catch { /* ignore parse errors */ }
+    return { id: r.id, status: r.status, passRate, createdAt: r.createdAt, executorType: r.executorType }
   })
 
   // Get eval run status breakdown

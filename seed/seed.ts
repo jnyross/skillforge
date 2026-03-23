@@ -8,11 +8,8 @@
 
 import { PrismaClient } from '@prisma/client'
 import { initSkillGitRepo, createVersion } from '../src/lib/services/git-storage'
-import path from 'path'
-import fs from 'fs'
 
 const prisma = new PrismaClient()
-const DATA_DIR = process.env.DATA_DIR || './data/skill-repos'
 
 const SEED_SKILLS = [
   {
@@ -128,26 +125,26 @@ Use this skill when the user asks you to write tests, add test coverage, or crea
 async function seed() {
   console.log('Seeding SkillForge with example data...\n')
 
-  // Ensure data directory exists
-  fs.mkdirSync(DATA_DIR, { recursive: true })
-
   for (const skill of SEED_SKILLS) {
     console.log(`Creating skill: ${skill.name}`)
 
     // 1. Create repo
     const slug = skill.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-    const repoPath = path.resolve(DATA_DIR, slug)
     const repo = await prisma.skillRepo.create({
       data: {
         slug,
         displayName: skill.name,
         description: skill.description,
-        gitRepoPath: repoPath,
+        gitRepoPath: '', // Will be set after git init
       },
     })
 
-    // 2. Init git repo
-    await initSkillGitRepo(repoPath)
+    // 2. Init git repo (pass repo.id, returns full path)
+    const repoPath = await initSkillGitRepo(repo.id)
+    await prisma.skillRepo.update({
+      where: { id: repo.id },
+      data: { gitRepoPath: repoPath },
+    })
 
     // 3. Create initial version
     const commitSha = await createVersion(repoPath, [
