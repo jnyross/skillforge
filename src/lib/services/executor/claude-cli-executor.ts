@@ -21,6 +21,13 @@ interface ClaudeCliResult {
     cache_read_input_tokens?: number
     cache_creation_input_tokens?: number
   }
+  modelUsage?: Record<string, {
+    inputTokens: number
+    outputTokens: number
+    cacheReadInputTokens?: number
+    cacheCreationInputTokens?: number
+    costUSD?: number
+  }>
 }
 
 /**
@@ -45,7 +52,30 @@ export class ClaudeCliExecutor implements Executor {
         },
       })
 
-      const parsed = JSON.parse(stdout.trim()) as ClaudeCliResult
+      const parsed = ClaudeCliExecutor.extractJson<ClaudeCliResult>(stdout)
+
+      // Extract model name from modelUsage keys if available
+      const modelName = parsed.modelUsage
+        ? Object.keys(parsed.modelUsage)[0] ?? input.config?.model
+        : input.config?.model
+
+      // Prefer per-model usage from modelUsage for accurate token counts
+      const modelUsageEntry = modelName ? parsed.modelUsage?.[modelName] : undefined
+      const usage = modelUsageEntry
+        ? {
+            inputTokens: modelUsageEntry.inputTokens || 0,
+            outputTokens: modelUsageEntry.outputTokens || 0,
+            cacheReadInputTokens: modelUsageEntry.cacheReadInputTokens,
+            cacheCreationInputTokens: modelUsageEntry.cacheCreationInputTokens,
+          }
+        : parsed.usage
+          ? {
+              inputTokens: parsed.usage.input_tokens || 0,
+              outputTokens: parsed.usage.output_tokens || 0,
+              cacheReadInputTokens: parsed.usage.cache_read_input_tokens,
+              cacheCreationInputTokens: parsed.usage.cache_creation_input_tokens,
+            }
+          : undefined
 
       return {
         sessionId: parsed.session_id || '',
@@ -53,15 +83,10 @@ export class ClaudeCliExecutor implements Executor {
         isError: parsed.is_error || false,
         durationMs: parsed.duration_ms || 0,
         durationApiMs: parsed.duration_api_ms,
-        costUsd: parsed.total_cost_usd,
-        model: input.config?.model,
+        costUsd: parsed.total_cost_usd ?? modelUsageEntry?.costUSD,
+        model: modelName,
         stopReason: parsed.stop_reason,
-        usage: parsed.usage ? {
-          inputTokens: parsed.usage.input_tokens || 0,
-          outputTokens: parsed.usage.output_tokens || 0,
-          cacheReadInputTokens: parsed.usage.cache_read_input_tokens,
-          cacheCreationInputTokens: parsed.usage.cache_creation_input_tokens,
-        } : undefined,
+        usage,
       }
     } catch (err) {
       const error = err as Error & { stderr?: string; code?: string }
@@ -85,12 +110,64 @@ export class ClaudeCliExecutor implements Executor {
     }
   }
 
+  /**
+   * Extract a JSON object from stdout that may contain trailing terminal escape codes.
+   * Claude CLI can append escape sequences (e.g., "9;4;0;") after the JSON.
+   */
+  private static extractJson<T>(stdout: string): T {
+    const trimmed = stdout.trim()
+
+    // Try parsing the whole string first (fast path)
+    try {
+      return JSON.parse(trimmed) as T
+    } catch {
+      // Fall through to extraction
+    }
+
+    // Find the JSON object boundaries
+    const firstBrace = trimmed.indexOf('{')
+    if (firstBrace === -1) {
+      throw new Error(`No JSON object found in Claude CLI output: ${trimmed.slice(0, 200)}`)
+    }
+
+    // Find the matching closing brace by counting depth
+    let depth = 0
+    let inString = false
+    let escape = false
+    for (let i = firstBrace; i < trimmed.length; i++) {
+      const ch = trimmed[i]
+      if (escape) {
+        escape = false
+        continue
+      }
+      if (ch === '\\' && inString) {
+        escape = true
+        continue
+      }
+      if (ch === '"') {
+        inString = !inString
+        continue
+      }
+      if (inString) continue
+      if (ch === '{') depth++
+      else if (ch === '}') {
+        depth--
+        if (depth === 0) {
+          return JSON.parse(trimmed.slice(firstBrace, i + 1)) as T
+        }
+      }
+    }
+
+    throw new Error(`Unterminated JSON object in Claude CLI output: ${trimmed.slice(0, 200)}`)
+  }
+
   private buildArgs(input: ExecutorInput): string[] {
     const args = [
       '-p', input.prompt,
       '--output-format', 'json',
       '--no-session-persistence',
       '--bare',
+      '--add-dir', input.workspacePath,
     ]
 
     const config = input.config
@@ -103,7 +180,7 @@ export class ClaudeCliExecutor implements Executor {
     if (config?.maxTurns != null) {
       args.push('--max-turns', String(config.maxTurns))
     }
-    if (config?.permissionMode) {
+    if (config?.permissionMode && config.permissionMode !== 'default') {
       args.push('--permission-mode', config.permissionMode)
     }
     if (config?.allowedTools && config.allowedTools.length > 0) {

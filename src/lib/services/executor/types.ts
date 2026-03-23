@@ -7,7 +7,7 @@ export interface ExecutorConfig {
   model?: string
   effort?: 'low' | 'medium' | 'high' | 'max'
   maxTurns?: number
-  permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan'
+  permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'auto'
   allowedTools?: string[]
   maxBudgetUsd?: number
   timeoutMs?: number

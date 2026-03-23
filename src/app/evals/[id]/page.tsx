@@ -71,7 +71,7 @@ export default function EvalSuiteDetailPage() {
 
   // Run form
   const [showRunForm, setShowRunForm] = useState(false)
-  const [runForm, setRunForm] = useState({ versionId: '', executorType: 'mock', model: 'claude-sonnet-4-20250514' })
+  const [runForm, setRunForm] = useState({ versionId: '', executorType: 'claude-cli', model: 'claude-sonnet-4-20250514' })
 
   const loadSuite = useCallback(async () => {
     const res = await fetch(`/api/eval-suites/${suiteId}`)
@@ -231,8 +231,8 @@ export default function EvalSuiteDetailPage() {
                 onChange={e => setRunForm(f => ({ ...f, executorType: e.target.value }))}
                 className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm"
               >
-                <option value="mock">Mock (Testing)</option>
                 <option value="claude-cli">Claude CLI</option>
+                <option value="mock">Mock (Testing)</option>
               </select>
             </div>
             <div>
