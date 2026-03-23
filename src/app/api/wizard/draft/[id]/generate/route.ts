@@ -18,9 +18,9 @@ export async function POST(
     return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
   }
 
-  if (draft.status !== 'intake') {
+  if (draft.status !== 'intake' && draft.status !== 'review') {
     return NextResponse.json(
-      { error: `Cannot generate from status "${draft.status}". Draft must be in "intake" status.` },
+      { error: `Cannot generate from status "${draft.status}". Draft must be in "intake" or "review" status.` },
       { status: 400 }
     )
   }
