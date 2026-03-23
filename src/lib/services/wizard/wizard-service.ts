@@ -287,7 +287,7 @@ function generateFallbackSkillMd(input: WizardInput): string {
   const name = input.intent.slice(0, 60).replace(/[^a-zA-Z0-9 -]/g, '').trim().toLowerCase().replace(/\s+/g, '-')
   return `---
 name: ${name}
-description: "${input.intent.slice(0, 200)}"
+description: ${JSON.stringify(input.intent.slice(0, 200))}
 ---
 
 # ${input.intent.slice(0, 80)}
@@ -314,7 +314,7 @@ function mockGenerate(input: WizardInput): GeneratedSkill {
 
   const skillMd = `---
 name: ${name}
-description: "${input.intent.slice(0, 200)}"
+description: ${JSON.stringify(input.intent.slice(0, 200))}
 ---
 
 # ${displayName}
