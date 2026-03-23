@@ -20,10 +20,14 @@ import Anthropic from '@anthropic-ai/sdk'
 
 export type WizardMode = 'extract' | 'synthesize' | 'hybrid' | 'scratch'
 
+export type FreedomLevel = 'high' | 'medium' | 'low'
+
 export interface WizardInput {
   mode: WizardMode
   intent: string
   artifacts: WizardArtifact[]
+  concreteExamples: string[]
+  freedomLevel: FreedomLevel
   conversations?: string[]
   corrections?: string[]
   desiredOutputFormat?: string
@@ -62,6 +66,65 @@ export interface GeneratedEvalCase {
   assertionValue?: string
   tags?: string[]
   split: 'train' | 'validation' | 'holdout'
+}
+
+const SHARED_SYSTEM_RULES = `
+
+PROGRESSIVE DISCLOSURE RULES (mandatory):
+- The "description" frontmatter field MUST be ≤100 words. It is the ONLY thing always loaded into context.
+- The SKILL.md body MUST be <500 lines. If content exceeds this, split into references/ files.
+- Do NOT include README.md, CHANGELOG.md, or other user-facing docs. Skills are for AI agents.
+- Move variant-specific details, large examples, and lookup tables into references/ files.
+- Avoid deeply nested references (max 1 level of $ref).
+
+CONCISENESS RULES (mandatory):
+- Only include information the agent does NOT already have as general knowledge.
+- Challenge each piece of information: does the agent really need this to complete the task?
+- Write directives, not wisdom. Tell the agent WHAT to do, not WHY.
+- Cut general knowledge: remove definitions, framework lists, academic citations.
+- Convert warnings into concrete anti-pattern sections or checklist items.
+- Start with good defaults: simplest correct approach first, then edge cases.
+
+SKILL WRITING PRINCIPLES (mandatory):
+- Every sentence must help the agent complete its task. Remove organizational advice, process guidance.
+- Use imperative form: "Run X", "Check Y", "If Z then do W".
+- Be concrete: show exact file paths, command patterns, expected outputs.
+- Scope to the build task: no motivational text, no general software engineering advice.
+
+AVAILABLE DESIGN PATTERNS (use when appropriate):
+
+Sequential Workflow: For tasks with ordered steps that must happen in sequence.
+  Structure: ## Steps / 1. Step name / - substep / - substep
+
+Conditional Workflow: For tasks with branching logic.
+  Structure: ## Decision Points / ### If [condition] / - action / ### Else / - action
+
+Template Output: For tasks that must produce output in a specific format.
+  Structure: ## Output Format / \`\`\`template / [template with placeholders] / \`\`\`
+
+Examples Output: For tasks where showing what good looks like is more effective than rules.
+  Structure: ## Examples / ### Good / [example] / ### Bad / [example]
+
+Plan-Validate-Execute: For fragile or destructive operations.
+  Structure: ## Plan / [what to check] / ## Validate / [dry-run or check] / ## Execute / [actual action]
+`
+
+const FREEDOM_LEVEL_INSTRUCTIONS: Record<FreedomLevel, string> = {
+  high: `\nSPECIFICITY LEVEL: HIGH FREEDOM
+- Write text-based instructions that allow multiple valid approaches.
+- Use natural language guidance, not scripts.
+- Focus on goals and constraints, not step-by-step procedures.
+- Appropriate for: writing style guides, code review, creative tasks.`,
+  medium: `\nSPECIFICITY LEVEL: MEDIUM FREEDOM
+- Write pseudocode or parameterized scripts for the core steps.
+- Allow flexibility in secondary decisions.
+- Include key decision points but not every detail.
+- Appropriate for: deployment, refactoring, standard workflows.`,
+  low: `\nSPECIFICITY LEVEL: LOW FREEDOM
+- Write specific, deterministic scripts for fragile operations.
+- Minimize degrees of freedom. Include exact commands, paths, and validation checks.
+- Every step must be precise and verifiable.
+- Appropriate for: database migrations, security patches, compliance checks.`,
 }
 
 const MODE_SYSTEM_PROMPTS: Record<WizardMode, string> = {
@@ -104,7 +167,7 @@ export async function generateSkillFromWizard(input: WizardInput): Promise<Gener
   try {
     const client = new Anthropic({ apiKey })
 
-    const systemPrompt = MODE_SYSTEM_PROMPTS[input.mode]
+    const systemPrompt = MODE_SYSTEM_PROMPTS[input.mode] + SHARED_SYSTEM_RULES + FREEDOM_LEVEL_INSTRUCTIONS[input.freedomLevel]
     const userPrompt = buildGenerationPrompt(input)
 
     const response = await client.messages.create({
@@ -123,6 +186,15 @@ export async function generateSkillFromWizard(input: WizardInput): Promise<Gener
 
 function buildGenerationPrompt(input: WizardInput): string {
   let prompt = `## User Intent\n${input.intent}\n\n`
+
+  // Concrete examples (Step 1 of Skill Creator methodology)
+  if (input.concreteExamples.length > 0) {
+    prompt += `## Concrete Usage Examples\nThese are real scenarios where this skill would be used. Ground the skill in these examples:\n`
+    for (let i = 0; i < input.concreteExamples.length; i++) {
+      prompt += `${i + 1}. ${input.concreteExamples[i]}\n`
+    }
+    prompt += '\n'
+  }
 
   if (input.artifacts.length > 0) {
     prompt += `## Provided Artifacts\n`

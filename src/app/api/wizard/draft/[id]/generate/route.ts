@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { generateSkillFromWizard, type WizardInput, type WizardArtifact, type WizardMode } from '@/lib/services/wizard/wizard-service'
+import { generateSkillFromWizard, type WizardInput, type WizardArtifact, type WizardMode, type FreedomLevel } from '@/lib/services/wizard/wizard-service'
 
 /**
  * POST /api/wizard/draft/:id/generate
@@ -58,10 +58,24 @@ export async function POST(
       // Ignore parse errors
     }
 
+    // Parse concrete examples
+    let concreteExamples: string[] = []
+    try {
+      const parsed = JSON.parse(draft.concreteExamples)
+      if (Array.isArray(parsed)) concreteExamples = parsed
+    } catch {
+      // ignore
+    }
+
+    const freedomLevel: FreedomLevel = (['high', 'medium', 'low'].includes(draft.freedomLevel)
+      ? draft.freedomLevel : 'medium') as FreedomLevel
+
     const input: WizardInput = {
       mode,
       intent: draft.intent,
       artifacts,
+      concreteExamples,
+      freedomLevel,
       conversations: artifacts
         .filter(a => a.type === 'other' && a.name.toLowerCase().includes('conversation'))
         .map(a => a.content),

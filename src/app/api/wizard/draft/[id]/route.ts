@@ -21,7 +21,7 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   const body = await request.json()
-  const { intent, artifactsJson, mode, configJson, status, generatedSkill, generatedEvals, smokeResultJson, savedVersionId, savedRepoId } = body
+  const { intent, artifactsJson, mode, configJson, concreteExamples, freedomLevel, status, generatedSkill, generatedEvals, smokeResultJson, savedVersionId, savedRepoId } = body
 
   const existing = await prisma.wizardDraft.findUnique({ where: { id: params.id } })
   if (!existing) {
@@ -35,6 +35,8 @@ export async function PATCH(
       ...(artifactsJson !== undefined && { artifactsJson: JSON.stringify(artifactsJson) }),
       ...(mode !== undefined && { mode }),
       ...(configJson !== undefined && { configJson: typeof configJson === 'string' ? configJson : JSON.stringify(configJson) }),
+      ...(concreteExamples !== undefined && { concreteExamples: typeof concreteExamples === 'string' ? concreteExamples : JSON.stringify(concreteExamples) }),
+      ...(freedomLevel !== undefined && { freedomLevel }),
       ...(status !== undefined && { status }),
       ...(generatedSkill !== undefined && { generatedSkill }),
       ...(generatedEvals !== undefined && { generatedEvals: JSON.stringify(generatedEvals) }),

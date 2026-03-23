@@ -30,6 +30,7 @@ interface EvalCase {
   expectedOutcome: string
   split: string
   tags: string
+  source: string
 }
 
 interface EvalRun {
@@ -71,7 +72,7 @@ export default function EvalSuiteDetailPage() {
 
   // Run form
   const [showRunForm, setShowRunForm] = useState(false)
-  const [runForm, setRunForm] = useState({ versionId: '', executorType: 'claude-cli', model: 'claude-sonnet-4-20250514' })
+  const [runForm, setRunForm] = useState({ versionId: '', executorType: 'claude-cli', model: 'claude-sonnet-4-20250514', splitFilter: 'all' })
 
   const loadSuite = useCallback(async () => {
     const res = await fetch(`/api/eval-suites/${suiteId}`)
@@ -131,6 +132,7 @@ export default function EvalSuiteDetailPage() {
         suiteId: suite.id,
         executorType: runForm.executorType,
         model: runForm.model,
+        splitFilter: runForm.splitFilter,
       }),
     })
     if (!createRes.ok) return
@@ -247,6 +249,21 @@ export default function EvalSuiteDetailPage() {
                 <option value="claude-haiku-35-20241022">Claude Haiku 3.5</option>
               </select>
             </div>
+          </div>
+          <div>
+            <label className="text-sm font-medium mb-1 block">Split Filter (Holdout Protection)</label>
+            <select
+              value={runForm.splitFilter}
+              onChange={e => setRunForm(f => ({ ...f, splitFilter: e.target.value }))}
+              className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm"
+            >
+              <option value="all">All splits</option>
+              <option value="train">Train only</option>
+              <option value="validation">Validation only</option>
+              <option value="train+validation">Train + Validation (exclude holdout)</option>
+              <option value="holdout">Holdout only</option>
+            </select>
+            <p className="text-xs text-muted-foreground mt-1">Use &quot;Train + Validation&quot; for optimizer runs to protect holdout data</p>
           </div>
           <div className="flex gap-2">
             <button onClick={startRun} disabled={!runForm.versionId} className="px-3 py-1.5 bg-green-600 text-white rounded-md text-sm hover:bg-green-700 disabled:opacity-50">
@@ -365,6 +382,9 @@ export default function EvalSuiteDetailPage() {
                   </div>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <span className="px-2 py-0.5 rounded bg-secondary">{c.split}</span>
+                    {c.source && c.source !== 'manual' && (
+                      <span className="px-2 py-0.5 rounded bg-purple-500/10 text-purple-400">{c.source}</span>
+                    )}
                     {c.tags && c.tags.split(',').map(t => (
                       <span key={t.trim()} className="px-2 py-0.5 rounded bg-secondary">{t.trim()}</span>
                     ))}

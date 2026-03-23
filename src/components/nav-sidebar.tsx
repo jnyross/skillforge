@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   FolderGit2, FlaskConical, Users, Scale, Zap, Wand2,
-  Settings, Activity, LayoutDashboard, Shield,
+  Settings, Activity, LayoutDashboard, Shield, SearchSlash,
 } from 'lucide-react'
 
 const navItems = [
@@ -14,6 +14,7 @@ const navItems = [
   { href: '/reviews', label: 'Review Arena', icon: Users },
   { href: '/judges', label: 'Judges', icon: Scale },
   { href: '/optimizer', label: 'Optimizer', icon: Zap },
+  { href: '/error-analysis', label: 'Error Analysis', icon: SearchSlash },
   { href: '/wizard', label: 'Wizard', icon: Wand2 },
   { href: '/acceptance', label: 'Acceptance', icon: Shield },
   { href: '/settings', label: 'Settings', icon: Settings },
