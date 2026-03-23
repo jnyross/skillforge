@@ -36,7 +36,7 @@ class MemoryQueueAdapter implements QueueAdapter {
 
   async getStatus(): Promise<{ provider: string; connected: boolean; pending: number }> {
     let pending = 0
-    for (const queue of this.queues.values()) {
+    for (const queue of Array.from(this.queues.values())) {
       pending += queue.length
     }
     return { provider: 'memory', connected: true, pending }

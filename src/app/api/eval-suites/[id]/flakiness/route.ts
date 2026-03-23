@@ -85,7 +85,7 @@ export async function GET(
 
   let stableCases = 0
 
-  for (const [caseId, data] of caseResults) {
+  for (const [caseId, data] of Array.from(caseResults.entries())) {
     const passCount = data.outcomes.filter(o => o === 'passed').length
     const failCount = data.outcomes.filter(o => o === 'failed' || o === 'error').length
     const totalRuns = data.outcomes.length
