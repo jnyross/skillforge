@@ -87,7 +87,15 @@ export async function handleEvalRunJob(
     }
 
     const isTriggerSuite = evalRun.suite.type === 'trigger'
-    const cases = evalRun.suite.cases
+    // Apply split filter (PR 6: holdout protection)
+    const splitFilter = (evalRun.splitFilter || 'all') as string
+    const allCases = evalRun.suite.cases
+    const cases = splitFilter === 'all'
+      ? allCases
+      : allCases.filter(c => {
+          const allowedSplits = splitFilter.split('+').map(s => s.trim())
+          return allowedSplits.includes(c.split)
+        })
     const caseResults: CaseResult[] = []
     const triggerResults: TriggerRunResult[] = []
 
@@ -412,6 +420,18 @@ async function executeOutputCase(
       assertions.push({
         type: 'contains',
         expected: evalCase.expectedOutcome,
+      })
+    }
+
+    // PR 2: If eval case has a judge assigned, add a judge assertion
+    if ('judgeId' in evalCase && evalCase.judgeId) {
+      assertions.push({
+        type: 'judge',
+        options: {
+          judgeId: evalCase.judgeId as string,
+          prompt: evalCase.prompt,
+          expectedOutcome: evalCase.expectedOutcome,
+        },
       })
     }
 

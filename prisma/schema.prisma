@@ -31,6 +31,7 @@ model SkillRepo {
   optimizerRuns            OptimizerRun[]
   reviewSessions           ReviewSession[]
   benchmarkSnapshots       BenchmarkSnapshot[]
+  errorAnalysisSessions    ErrorAnalysisSession[]
 }
 
 model SkillVersion {
@@ -133,6 +134,7 @@ model EvalSuite {
   skillRepo       SkillRepo  @relation(fields: [skillRepoId], references: [id], onDelete: Cascade)
   cases           EvalCase[]
   evalRuns        EvalRun[]
+  syntheticDataConfigs SyntheticDataConfig[]
 
   @@unique([skillRepoId, name])
   @@index([skillRepoId])
@@ -149,10 +151,13 @@ model EvalCase {
   split           String     @default("train") // train | validation | holdout
   tags            String     @default("")
   configJson      String     @default("{}")
+  judgeId         String?    // optional judge for Level 2 eval
+  source          String     @default("manual") // manual | wizard | synthetic | error-analysis | promoted-trace
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
   evalSuite       EvalSuite  @relation(fields: [evalSuiteId], references: [id], onDelete: Cascade)
+  judge           JudgeDefinition? @relation(fields: [judgeId], references: [id], onDelete: SetNull)
   fixtures        EvalCaseFixture[]
   caseRuns        EvalCaseRun[]
 
@@ -186,6 +191,7 @@ model EvalRun {
   effort            String     @default("medium")
   permissionMode    String     @default("default")
   maxTurns          Int        @default(10)
+  splitFilter       String     @default("all") // train | validation | train+validation | all
   status            String     @default("queued") // queued | running | completed | failed | cancelled
   startedAt         DateTime?
   completedAt       DateTime?
@@ -376,6 +382,7 @@ model JudgeDefinition {
   promptVersions      JudgePromptVersion[]
   calibrationRuns     JudgeCalibrationRun[]
   examples            JudgeExample[]
+  evalCases           EvalCase[]
 }
 
 model JudgePromptVersion {
@@ -543,6 +550,7 @@ model Trace {
   artifacts       RunArtifact[]
   logChunks       LogChunk[]
   caseRuns        EvalCaseRun[] @relation("CaseRunTrace")
+  errorAnalysisTraces ErrorAnalysisTrace[]
 
   @@index([evalRunId])
   @@index([skillVersionId])
@@ -604,6 +612,8 @@ model WizardDraft {
   mode            String     @default("scratch") // extract | synthesize | hybrid | scratch
   artifactsJson   String     @default("[]")
   configJson      String     @default("{}") // corrections, desiredOutputFormat, safetyConstraints, allowedTools
+  concreteExamples String    @default("[]") // JSON array of concrete usage examples
+  freedomLevel    String     @default("medium") // high | medium | low
   status          String     @default("intake") // intake | generating | review | saved | abandoned
   generatedSkill  String     @default("")
   generatedEvals  String     @default("{}")
@@ -612,6 +622,111 @@ model WizardDraft {
   savedRepoId     String?
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
+}
+
+// =============================================================================
+// Error Analysis entities
+// =============================================================================
+
+model ErrorAnalysisSession {
+  id                String   @id @default(uuid())
+  skillRepoId       String
+  name              String
+  description       String   @default("")
+  status            String   @default("active") // active | saturated | archived
+  samplingStrategy  String   @default("random") // random | outlier | failure-driven | uncertainty | stratified
+  targetTraceCount  Int      @default(100)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  skillRepo         SkillRepo @relation(fields: [skillRepoId], references: [id], onDelete: Cascade)
+  traces            ErrorAnalysisTrace[]
+  categories        FailureCategory[]
+
+  @@index([skillRepoId])
+}
+
+model ErrorAnalysisTrace {
+  id                  String    @id @default(uuid())
+  analysisSessionId   String
+  traceId             String
+  sequence            Int       // order in which traces were reviewed
+  openCodingNotes     String    @default("") // free-text notes (open coding)
+  failureCategoryId   String?   // assigned category (axial coding)
+  isNewFailureMode    Boolean   @default(false)
+  reviewedAt          DateTime?
+  createdAt           DateTime  @default(now())
+
+  analysisSession     ErrorAnalysisSession @relation(fields: [analysisSessionId], references: [id], onDelete: Cascade)
+  trace               Trace @relation(fields: [traceId], references: [id], onDelete: Cascade)
+  failureCategory     FailureCategory? @relation(fields: [failureCategoryId], references: [id], onDelete: SetNull)
+
+  @@index([analysisSessionId])
+  @@index([traceId])
+}
+
+model FailureCategory {
+  id                  String   @id @default(uuid())
+  analysisSessionId   String
+  name                String
+  description         String   @default("")
+  severity            String   @default("major") // minor | major | critical
+  exampleTraceIds     String   @default("") // comma-separated trace IDs as exemplars
+  count               Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  analysisSession     ErrorAnalysisSession @relation(fields: [analysisSessionId], references: [id], onDelete: Cascade)
+  traces              ErrorAnalysisTrace[]
+
+  @@index([analysisSessionId])
+}
+
+// =============================================================================
+// Synthetic Data entities
+// =============================================================================
+
+model SyntheticDataConfig {
+  id              String   @id @default(uuid())
+  evalSuiteId     String
+  name            String
+  status          String   @default("draft") // draft | generating | review | committed
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  evalSuite       EvalSuite @relation(fields: [evalSuiteId], references: [id], onDelete: Cascade)
+  dimensions      SyntheticDimension[]
+  generatedTuples SyntheticTuple[]
+
+  @@index([evalSuiteId])
+}
+
+model SyntheticDimension {
+  id              String   @id @default(uuid())
+  configId        String
+  name            String
+  values          String   // JSON array of values
+  order           Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  config          SyntheticDataConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  @@index([configId])
+}
+
+model SyntheticTuple {
+  id              String   @id @default(uuid())
+  configId        String
+  dimensionValues String   // JSON object mapping dimension name -> value
+  naturalLanguage String   @default("") // generated natural language prompt
+  expectedOutcome String   @default("") // generated expected outcome
+  included        Boolean  @default(true)
+  evalCaseId      String?  // linked eval case once committed
+  createdAt       DateTime @default(now())
+
+  config          SyntheticDataConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  @@index([configId])
 }
 
 // =============================================================================

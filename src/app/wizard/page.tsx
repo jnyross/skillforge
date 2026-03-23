@@ -81,6 +81,14 @@ export default function WizardPage() {
   const [safetyConstraints, setSafetyConstraints] = useState('')
   const [allowedTools, setAllowedTools] = useState('')
 
+  // PR 1: Concrete examples and freedom level
+  const [concreteExamples, setConcreteExamples] = useState<string[]>([])
+  const [newExample, setNewExample] = useState('')
+  const [freedomLevel, setFreedomLevel] = useState<'high' | 'medium' | 'low'>('medium')
+
+  // Quality metrics for review step
+  const [lintResults, setLintResults] = useState<{ errors: number; warnings: number; infos: number; details: Array<{ severity: string; message: string }> } | null>(null)
+
   // New artifact form
   const [showArtifactForm, setShowArtifactForm] = useState(false)
   const [newArtifactName, setNewArtifactName] = useState('')
@@ -133,6 +141,8 @@ export default function WizardPage() {
         intent: intent.trim(),
         artifactsJson: artifacts,
         mode: mode || 'scratch',
+        concreteExamples: JSON.stringify(concreteExamples.filter(Boolean)),
+        freedomLevel,
         configJson: JSON.stringify({
           ...(corrections.trim() ? { corrections: corrections.trim().split('\n').filter(Boolean) } : {}),
           ...(desiredOutputFormat.trim() ? { desiredOutputFormat: desiredOutputFormat.trim() } : {}),
@@ -185,6 +195,26 @@ export default function WizardPage() {
         setRepoName(nameMatch[1].trim().replace(/^["']|["']$/g, '').replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()))
       }
 
+      // Run lint on generated skill
+      try {
+        const lintRes = await fetch('/api/skill-repos/lint', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: genData.generated.skillMd }),
+        })
+        if (lintRes.ok) {
+          const lintData = await lintRes.json()
+          setLintResults({
+            errors: lintData.errorCount ?? 0,
+            warnings: lintData.warningCount ?? 0,
+            infos: lintData.infoCount ?? 0,
+            details: (lintData.results ?? []).slice(0, 10).map((r: { severity: string; message: string }) => ({ severity: r.severity, message: r.message })),
+          })
+        }
+      } catch {
+        // lint is optional, don't block
+      }
+
       setStep('review')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Generation failed')
@@ -228,6 +258,10 @@ export default function WizardPage() {
     setDesiredOutputFormat('')
     setSafetyConstraints('')
     setAllowedTools('')
+    setConcreteExamples([])
+    setNewExample('')
+    setFreedomLevel('medium')
+    setLintResults(null)
     setDraftId(null)
     setGenerated(null)
     setEditedSkillMd('')
@@ -449,6 +483,89 @@ export default function WizardPage() {
             />
           </div>
 
+          {/* Concrete Examples (Step 1 of Skill Creator methodology) */}
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Concrete Usage Examples
+            </label>
+            <p className="text-xs text-muted-foreground mb-2">
+              Provide 3-5 real scenarios where this skill would be used. These ground the skill in practical use cases.
+            </p>
+            {concreteExamples.map((ex, i) => (
+              <div key={i} className="flex items-center gap-2 mb-2">
+                <span className="text-xs text-muted-foreground w-4">{i + 1}.</span>
+                <input
+                  value={ex}
+                  onChange={e => {
+                    const updated = [...concreteExamples]
+                    updated[i] = e.target.value
+                    setConcreteExamples(updated)
+                  }}
+                  className="flex-1 px-2 py-1.5 bg-background border border-border rounded text-sm"
+                />
+                <button onClick={() => setConcreteExamples(prev => prev.filter((_, j) => j !== i))} className="p-1 hover:bg-accent rounded">
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+            <div className="flex items-center gap-2">
+              <input
+                value={newExample}
+                onChange={e => setNewExample(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && newExample.trim()) {
+                    setConcreteExamples(prev => [...prev, newExample.trim()])
+                    setNewExample('')
+                  }
+                }}
+                placeholder="Type a usage example and press Enter..."
+                className="flex-1 px-2 py-1.5 bg-background border border-border rounded text-sm"
+              />
+              <button
+                onClick={() => {
+                  if (newExample.trim()) {
+                    setConcreteExamples(prev => [...prev, newExample.trim()])
+                    setNewExample('')
+                  }
+                }}
+                disabled={!newExample.trim()}
+                className="flex items-center gap-1 px-2 py-1.5 text-xs border border-border rounded hover:bg-accent disabled:opacity-50"
+              >
+                <Plus className="h-3 w-3" /> Add
+              </button>
+            </div>
+          </div>
+
+          {/* Freedom Level (Degrees of Freedom) */}
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Specificity Level
+            </label>
+            <p className="text-xs text-muted-foreground mb-2">
+              How much freedom should the agent have when following this skill?
+            </p>
+            <div className="grid grid-cols-3 gap-3">
+              {(['high', 'medium', 'low'] as const).map(level => (
+                <button
+                  key={level}
+                  onClick={() => setFreedomLevel(level)}
+                  className={`border rounded-lg p-3 text-left transition-colors ${
+                    freedomLevel === level
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:bg-accent/50'
+                  }`}
+                >
+                  <p className="text-sm font-medium capitalize">{level} Freedom</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {level === 'high' && 'Text instructions, multiple valid approaches'}
+                    {level === 'medium' && 'Pseudocode, parameterized steps'}
+                    {level === 'low' && 'Exact scripts, minimal flexibility'}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Artifacts */}
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -639,6 +756,54 @@ export default function WizardPage() {
               </ul>
             </div>
           )}
+
+          {/* Quality Metrics Panel */}
+          <div className="grid grid-cols-4 gap-3">
+            <div className="border border-border rounded-lg p-3 bg-card">
+              <p className="text-xs text-muted-foreground">Description Words</p>
+              <p className="text-lg font-bold">
+                {(() => {
+                  const descMatch = editedSkillMd.match(/^description:\s*(.+)$/m)
+                  const wordCount = descMatch ? descMatch[1].split(/\s+/).filter(Boolean).length : 0
+                  return wordCount
+                })()}
+              </p>
+              <p className="text-xs text-muted-foreground">Target: ≤100</p>
+            </div>
+            <div className="border border-border rounded-lg p-3 bg-card">
+              <p className="text-xs text-muted-foreground">Body Lines</p>
+              <p className="text-lg font-bold">{editedSkillMd.split('\n').length}</p>
+              <p className="text-xs text-muted-foreground">Target: &lt;500</p>
+            </div>
+            <div className="border border-border rounded-lg p-3 bg-card">
+              <p className="text-xs text-muted-foreground">Reference Files</p>
+              <p className="text-lg font-bold">{generated.files.length}</p>
+            </div>
+            <div className="border border-border rounded-lg p-3 bg-card">
+              <p className="text-xs text-muted-foreground">Lint</p>
+              {lintResults ? (
+                <>
+                  <p className={`text-lg font-bold ${lintResults.errors > 0 ? 'text-red-400' : lintResults.warnings > 0 ? 'text-amber-400' : 'text-green-400'}`}>
+                    {lintResults.errors > 0 ? `${lintResults.errors} errors` : lintResults.warnings > 0 ? `${lintResults.warnings} warns` : 'Clean'}
+                  </p>
+                  {lintResults.details.length > 0 && (
+                    <details className="mt-1">
+                      <summary className="text-xs text-muted-foreground cursor-pointer">Details</summary>
+                      <ul className="text-xs mt-1 space-y-0.5">
+                        {lintResults.details.map((d, i) => (
+                          <li key={i} className={d.severity === 'error' ? 'text-red-400' : d.severity === 'warning' ? 'text-amber-400' : 'text-muted-foreground'}>
+                            [{d.severity}] {d.message}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">N/A</p>
+              )}
+            </div>
+          </div>
 
           {/* Generated SKILL.md — editable */}
           <div>

@@ -10,7 +10,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
-  const { intent, artifactsJson, mode, corrections, desiredOutputFormat, safetyConstraints, allowedTools } = body
+  const { intent, artifactsJson, mode, corrections, desiredOutputFormat, safetyConstraints, allowedTools, concreteExamples, freedomLevel } = body
 
   const configJson: Record<string, unknown> = {}
   if (corrections && Array.isArray(corrections) && corrections.length > 0) configJson.corrections = corrections
@@ -24,6 +24,8 @@ export async function POST(request: NextRequest) {
       mode: mode || 'scratch',
       artifactsJson: artifactsJson ? JSON.stringify(artifactsJson) : '[]',
       configJson: JSON.stringify(configJson),
+      concreteExamples: concreteExamples || '[]',
+      freedomLevel: freedomLevel || 'medium',
       status: 'intake',
     },
   })

@@ -29,6 +29,7 @@ export type AssertionType =
   | 'row_count'
   | 'exit_code'
   | 'custom_script'
+  | 'judge'
 
 export interface AssertionDefinition {
   type: AssertionType
@@ -40,6 +41,9 @@ export interface AssertionDefinition {
     schema?: Record<string, unknown> // JSON schema
     scriptPath?: string // path to custom validator script
     field?: string // JSON field path for nested checks
+    judgeId?: string // judge ID for 'judge' assertion type
+    expectedOutcome?: string // expected outcome for judge context
+    prompt?: string // original prompt for judge context
   }
 }
 
@@ -90,6 +94,8 @@ export async function runAssertion(
         return await assertExitCode(assertion, context, start)
       case 'custom_script':
         return await assertCustomScript(assertion, context, start)
+      case 'judge':
+        return await assertJudge(assertion, context, start)
       default:
         return {
           type: assertion.type,
@@ -648,6 +654,48 @@ async function assertCustomScript(
       passed: false,
       target: scriptPath,
       evidence: `Script execution error: ${err instanceof Error ? err.message : String(err)}`,
+      durationMs: Date.now() - start,
+    }
+  }
+}
+
+async function assertJudge(
+  assertion: AssertionDefinition,
+  context: { result: string; stdout: string },
+  start: number
+): Promise<AssertionResult> {
+  const judgeId = assertion.options?.judgeId
+  if (!judgeId) {
+    return {
+      type: 'judge',
+      passed: false,
+      evidence: 'No judgeId specified in assertion options',
+      durationMs: Date.now() - start,
+    }
+  }
+
+  try {
+    const { evaluateWithJudge } = await import('../judge/judge-evaluator')
+    const result = await evaluateWithJudge({
+      judgeId,
+      input: assertion.options?.prompt || '',
+      output: context.result,
+      expectedOutcome: assertion.options?.expectedOutcome || String(assertion.expected ?? ''),
+    })
+
+    return {
+      type: 'judge',
+      passed: result.passed,
+      expected: 'pass',
+      actual: result.label,
+      evidence: `Judge verdict: ${result.label} (confidence: ${(result.confidence * 100).toFixed(0)}%) — ${result.evidence}${result.chainOfThought ? `\n\nReasoning: ${result.chainOfThought}` : ''}`,
+      durationMs: result.durationMs,
+    }
+  } catch (err) {
+    return {
+      type: 'judge',
+      passed: false,
+      evidence: `Judge evaluation error: ${err instanceof Error ? err.message : String(err)}`,
       durationMs: Date.now() - start,
     }
   }

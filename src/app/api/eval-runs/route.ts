@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const {
     skillRepoId, skillVersionId, baselineVersionId, suiteId,
-    executorType, model, effort, permissionMode, maxTurns,
+    executorType, model, effort, permissionMode, maxTurns, splitFilter,
   } = body
 
   if (!skillRepoId || !skillVersionId || !suiteId) {
@@ -52,6 +52,7 @@ export async function POST(request: NextRequest) {
       effort: effort || 'medium',
       permissionMode: permissionMode || 'default',
       maxTurns: maxTurns ?? 10,
+      splitFilter: splitFilter || 'all',
       status: 'queued',
     },
   })

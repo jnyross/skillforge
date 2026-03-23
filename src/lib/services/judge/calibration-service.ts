@@ -116,11 +116,12 @@ export async function runCalibration(
     },
   })
 
-  // Only auto-promote if judge is in draft or candidate status (respects lifecycle).
-  // Never resurrect a deprecated judge or re-promote an already calibrated one.
+  // Auto-promote using TPR/TNR thresholds (Gap 5: Hussain requires TPR ≥ 90% AND TNR ≥ 90%)
+  // Minimum acceptable: TPR > 80% AND TNR > 80%
+  // Target: TPR > 90% AND TNR > 90%
   const currentJudge = await prisma.judgeDefinition.findUnique({ where: { id: judge.id } })
   if (currentJudge && (currentJudge.status === 'draft' || currentJudge.status === 'candidate')) {
-    if (agreementRate >= 0.7 && total >= 5) {
+    if (tpr >= 0.9 && tnr >= 0.9 && total >= 5) {
       await prisma.judgeDefinition.update({
         where: { id: judge.id },
         data: { status: 'calibrated' },
@@ -154,12 +155,31 @@ async function evaluateExample(
       .replace('{{input}}', example.input)
       .replace('{{criterion}}', judge.targetCriterion)
 
+    // Fetch few-shot examples from training split for injection
+    const trainingExamples = await prisma.judgeExample.findMany({
+      where: { judgeId: judge.id, split: 'train' },
+      take: 5,
+    })
+
+    let systemPromptText = promptVersion.systemPrompt || `You are a binary judge. Evaluate the following input and respond with a JSON object containing "label" (either "pass" or "fail") and "evidence" (a brief explanation). Criterion: ${judge.targetCriterion}`
+
+    // Inject few-shot examples from training split (Gap 8)
+    if (trainingExamples.length > 0) {
+      systemPromptText += '\n\nFEW-SHOT EXAMPLES:\n'
+      for (const ex of trainingExamples) {
+        systemPromptText += `\nInput: ${ex.input}\nLabel: ${ex.expectedLabel}\nCritique: ${ex.humanCritique}\n---`
+      }
+    }
+
+    // Add chain-of-thought instruction (Gap 9)
+    systemPromptText += `\n\nIMPORTANT: Think step by step. Respond with JSON:\n{\n  "chain_of_thought": "Your reasoning...",\n  "label": "pass" or "fail",\n  "evidence": "Brief explanation"\n}`
+
     const response = await client.messages.create({
       model: judge.model,
-      max_tokens: 512,
-      system: promptVersion.systemPrompt || `You are a binary judge. Evaluate the following input and respond with a JSON object containing "label" (either "pass" or "fail") and "evidence" (a brief explanation). Criterion: ${judge.targetCriterion}`,
+      max_tokens: 1024,
+      system: systemPromptText,
       messages: [
-        { role: 'user', content: userPrompt || `Evaluate this input:\n\n${example.input}\n\nRespond with JSON: {"label": "pass" or "fail", "evidence": "..."}` },
+        { role: 'user', content: userPrompt || `Evaluate this input:\n\n${example.input}\n\nRespond with JSON: {"chain_of_thought": "...", "label": "pass" or "fail", "evidence": "..."}` },
       ],
     })
 
