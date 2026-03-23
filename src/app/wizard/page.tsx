@@ -126,16 +126,35 @@ export default function WizardPage() {
     setStep('generating')
 
     try {
-      // 1. Create or reuse draft
+      // 1. Create or update draft
       let currentDraftId = draftId
-      if (!currentDraftId) {
+
+      const draftPayload = {
+        intent: intent.trim(),
+        artifactsJson: artifacts,
+        mode: mode || 'scratch',
+        configJson: JSON.stringify({
+          ...(corrections.trim() ? { corrections: corrections.trim().split('\n').filter(Boolean) } : {}),
+          ...(desiredOutputFormat.trim() ? { desiredOutputFormat: desiredOutputFormat.trim() } : {}),
+          ...(safetyConstraints.trim() ? { safetyConstraints: safetyConstraints.trim() } : {}),
+          ...(allowedTools.trim() ? { allowedTools: allowedTools.split(',').map((t: string) => t.trim()).filter(Boolean) } : {}),
+        }),
+      }
+
+      if (currentDraftId) {
+        // Update existing draft with current UI state before re-generating
+        const patchRes = await fetch(`/api/wizard/draft/${currentDraftId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(draftPayload),
+        })
+        if (!patchRes.ok) throw new Error('Failed to update draft')
+      } else {
         const draftRes = await fetch('/api/wizard/draft', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            intent: intent.trim(),
-            artifactsJson: artifacts,
-            mode: mode || 'scratch',
+            ...draftPayload,
             corrections: corrections.trim() ? corrections.trim().split('\n').filter(Boolean) : [],
             desiredOutputFormat: desiredOutputFormat.trim() || undefined,
             safetyConstraints: safetyConstraints.trim() || undefined,
