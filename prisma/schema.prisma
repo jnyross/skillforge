@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model SkillRepo {
+  id                      String         @id @default(uuid())
+  slug                    String         @unique
+  displayName             String
+  description             String         @default("")
+  defaultBranch           String         @default("main")
+  currentChampionVersionId String?
+  gitRepoPath             String
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
+
+  currentChampionVersion  SkillVersion?  @relation("ChampionVersion", fields: [currentChampionVersionId], references: [id], onDelete: SetNull)
+  versions                SkillVersion[] @relation("RepoVersions")
+  lintResults             LintResult[]
+}
+
+model SkillVersion {
+  id              String    @id @default(uuid())
+  skillRepoId     String
+  branchName      String    @default("main")
+  gitCommitSha    String
+  parentVersionId String?
+  commitMessage   String
+  createdBy       String    @default("user")
+  createdAt       DateTime  @default(now())
+  tokenCount      Int       @default(0)
+  lineCount       Int       @default(0)
+  fileCount       Int       @default(0)
+  isChampion      Boolean   @default(false)
+  notes           String    @default("")
+
+  skillRepo       SkillRepo @relation("RepoVersions", fields: [skillRepoId], references: [id], onDelete: Cascade)
+  championOfRepo  SkillRepo[] @relation("ChampionVersion")
+  parentVersion   SkillVersion? @relation("VersionLineage", fields: [parentVersionId], references: [id])
+  childVersions   SkillVersion[] @relation("VersionLineage")
+  lintResults     LintResult[]
+
+  @@index([skillRepoId, createdAt])
+  @@index([skillRepoId, branchName, createdAt])
+}
+
+model LintResult {
+  id              String    @id @default(uuid())
+  skillRepoId     String
+  skillVersionId  String?
+  severity        String    // "error" | "warning" | "info"
+  category        String    // scorecard category
+  rule            String
+  message         String
+  file            String    @default("SKILL.md")
+  line            Int?
+  evidence        String    @default("")
+  createdAt       DateTime  @default(now())
+
+  skillRepo       SkillRepo    @relation(fields: [skillRepoId], references: [id], onDelete: Cascade)
+  skillVersion    SkillVersion? @relation(fields: [skillVersionId], references: [id], onDelete: Cascade)
+
+  @@index([skillRepoId])
+  @@index([skillVersionId])
+}
