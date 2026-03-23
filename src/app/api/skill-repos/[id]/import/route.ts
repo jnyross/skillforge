@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { createVersion, readFiles, writeFiles, initSkillGitRepo } from '@/lib/services/git-storage'
+import { createVersion } from '@/lib/services/git-storage'
 import { parseSkillMd, estimateTokenCount, countLines } from '@/lib/services/skill-parser'
 import { lintSkill } from '@/lib/validators/skill-linter'
 import type { SkillFile } from '@/types/skill'
@@ -94,19 +94,13 @@ export async function POST(
       // Import from local folder path
       const resolvedPath = path.resolve(folderPath)
 
-      // Security: prevent importing from sensitive paths
-      const denyPaths = [
-        path.join(os.homedir(), '.ssh'),
-        '/etc',
-        '/root',
-      ]
-      for (const deny of denyPaths) {
-        if (resolvedPath.startsWith(deny)) {
-          return NextResponse.json(
-            { error: `Import from ${deny} is not allowed` },
-            { status: 403 }
-          )
-        }
+      // Security: allowlist approach — only allow imports from a configured base directory
+      const allowedBase = path.resolve(process.env.SKILL_IMPORT_BASE_PATH || './data/imports')
+      if (!resolvedPath.startsWith(allowedBase + path.sep) && resolvedPath !== allowedBase) {
+        return NextResponse.json(
+          { error: `Import path must be under the configured import directory: ${allowedBase}` },
+          { status: 403 }
+        )
       }
 
       try {
