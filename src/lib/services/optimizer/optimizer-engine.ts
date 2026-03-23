@@ -109,11 +109,17 @@ export async function handleOptimizerJob(
   try {
     await runOptimizationLoop(optimizerRunId, run, config)
 
-    // Mark as completed
-    await prisma.optimizerRun.update({
+    // Only mark as completed if not already stopped
+    const finalRun = await prisma.optimizerRun.findUnique({
       where: { id: optimizerRunId },
-      data: { status: 'completed', completedAt: new Date() },
+      select: { status: true },
     })
+    if (finalRun?.status !== 'stopped') {
+      await prisma.optimizerRun.update({
+        where: { id: optimizerRunId },
+        data: { status: 'completed', completedAt: new Date() },
+      })
+    }
 
     await logAuditEvent({
       action: 'optimizer_run.completed',

@@ -71,6 +71,7 @@ export default function OptimizerPage() {
   // Load versions when repo is selected
   useEffect(() => {
     if (!selectedRepoId) { setVersions([]); return }
+    setSelectedSuiteIds([])
     fetch(`/api/skill-repos/${selectedRepoId}`)
       .then(r => r.json())
       .then(data => {
