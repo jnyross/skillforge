@@ -55,6 +55,10 @@ export async function handleEvalRunJob(
     return { status: 'cancelled' }
   }
 
+  if (evalRun.status !== 'queued') {
+    return { status: 'skipped', reason: `Run is already in '${evalRun.status}' status` }
+  }
+
   // Mark as running
   await prisma.evalRun.update({
     where: { id: evalRunId },

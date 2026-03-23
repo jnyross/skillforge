@@ -37,7 +37,10 @@ export async function createWorkspace(options: {
   await fs.mkdir(skillDir, { recursive: true })
 
   for (const file of skillFiles) {
-    const filePath = path.join(skillDir, file.path)
+    const filePath = path.resolve(skillDir, file.path)
+    if (!filePath.startsWith(skillDir + path.sep) && filePath !== skillDir) {
+      throw new Error(`Path traversal detected in skill file: ${file.path}`)
+    }
     await fs.mkdir(path.dirname(filePath), { recursive: true })
     await fs.writeFile(filePath, file.content, 'utf-8')
   }
