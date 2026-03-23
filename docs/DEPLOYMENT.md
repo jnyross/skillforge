@@ -98,7 +98,7 @@ npx tsx seed/seed.ts
 | Environment Variable | Default | Description |
 |---|---|---|
 | `DATABASE_URL` | `file:./dev.db` | SQLite database path |
-| `DATA_DIR` | `./data/skill-repos` | Directory for git-backed skill repositories |
+| `SKILL_REPOS_PATH` | `./data/skill-repos` | Directory for git-backed skill repositories |
 | `ANTHROPIC_API_KEY` | (none) | API key for Anthropic Claude (wizard, judge, optimizer) |
 | `DEFAULT_EXECUTOR` | `claude-cli` | Default executor type for eval runs |
 | `DEFAULT_MODEL` | `claude-sonnet-4-20250514` | Default model for Claude CLI |
@@ -177,7 +177,7 @@ npx prisma studio
 
 ### Git repo issues
 ```bash
-# Skill repos are stored in DATA_DIR
+# Skill repos are stored in SKILL_REPOS_PATH
 ls -la data/skill-repos/
 
 # Each repo is a standard git repo
