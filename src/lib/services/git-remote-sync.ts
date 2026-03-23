@@ -63,24 +63,8 @@ export async function configureRemote(
       await git.addRemote(remoteName, remoteUrl)
     }
 
-    // Store remote config in DB
-    await prisma.skillRepo.update({
-      where: { id: skillRepoId },
-      data: {
-        description: await prisma.skillRepo.findUnique({
-          where: { id: skillRepoId },
-          select: { description: true },
-        }).then(r => {
-          const desc = r?.description || ''
-          // Store remote URL in a parseable way (without token)
-          const cleanUrl = config.remoteUrl
-          if (desc.includes('[remote:')) {
-            return desc.replace(/\[remote:[^\]]*\]/, `[remote:${cleanUrl}]`)
-          }
-          return desc + (desc ? '\n' : '') + `[remote:${cleanUrl}]`
-        }),
-      },
-    })
+    // Remote URL is stored in the git config (.git/config) by simple-git.
+    // No need to store it in the DB — getSyncStatus reads from git directly.
 
     return { success: true }
   } catch (err) {

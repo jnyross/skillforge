@@ -173,6 +173,15 @@ function CodeRenderer({ content }: { content: string }) {
   )
 }
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
 function MarkdownRenderer({ content }: { content: string }) {
   // Simple markdown rendering — headings, bold, italic, code, lists
   const lines = content.split('\n')
@@ -202,8 +211,9 @@ function MarkdownRenderer({ content }: { content: string }) {
         }
         // Empty line
         if (!line.trim()) return <div key={i} className="h-2" />
-        // Regular text with inline formatting
-        const formatted = line
+        // Regular text with inline formatting (escape HTML first to prevent XSS)
+        const escaped = escapeHtml(line)
+        const formatted = escaped
           .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
           .replace(/\*(.+?)\*/g, '<em>$1</em>')
           .replace(/`(.+?)`/g, '<code class="px-1 py-0.5 bg-secondary rounded text-xs font-mono">$1</code>')
