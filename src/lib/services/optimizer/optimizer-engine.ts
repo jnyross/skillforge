@@ -432,12 +432,21 @@ async function evaluateCandidate(
     select: { metricsJson: true, suiteId: true },
   })
 
+  // Deduplicate: take only the most recent completed run per suite
+  const latestBySuite = new Map<string, (typeof existingRuns)[0]>()
+  for (const run of existingRuns) {
+    if (!latestBySuite.has(run.suiteId)) {
+      latestBySuite.set(run.suiteId, run)
+    }
+  }
+  const dedupedExistingRuns = Array.from(latestBySuite.values())
+
   // Only use cached results if ALL requested suites have completed runs
-  const coveredSuiteIds = new Set(existingRuns.map(r => r.suiteId))
+  const coveredSuiteIds = new Set(dedupedExistingRuns.map(r => r.suiteId))
   const allCovered = suiteIds.every(id => coveredSuiteIds.has(id))
 
-  if (allCovered && existingRuns.length > 0) {
-    return aggregateMetrics(existingRuns.map(r => JSON.parse(r.metricsJson || '{}')))
+  if (allCovered && dedupedExistingRuns.length > 0) {
+    return aggregateMetrics(dedupedExistingRuns.map(r => JSON.parse(r.metricsJson || '{}')))
   }
 
   // Missing suites — create and start eval runs for uncovered suites
@@ -473,9 +482,9 @@ async function evaluateCandidate(
     select: { metricsJson: true },
   })
 
-  // Combine cached results from existing runs with newly completed runs
+  // Combine cached results (deduplicated) with newly completed runs
   const allMetrics = [
-    ...existingRuns.map(r => JSON.parse(r.metricsJson || '{}')),
+    ...dedupedExistingRuns.map(r => JSON.parse(r.metricsJson || '{}')),
     ...completedRuns.map(r => JSON.parse(r.metricsJson || '{}')),
   ]
 
