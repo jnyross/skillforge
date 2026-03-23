@@ -32,7 +32,38 @@ export async function PATCH(
     return NextResponse.json({ error: 'Config not found' }, { status: 404 })
   }
 
-  // Update tuple inclusion status
+  // Add a dimension
+  if (body.addDimension) {
+    const maxOrder = await prisma.syntheticDimension.aggregate({
+      where: { configId: params.id },
+      _max: { order: true },
+    })
+    await prisma.syntheticDimension.create({
+      data: {
+        configId: params.id,
+        name: body.addDimension.name,
+        values: body.addDimension.values,
+        order: (maxOrder._max.order ?? -1) + 1,
+      },
+    })
+  }
+
+  // Remove a dimension
+  if (body.removeDimensionId) {
+    await prisma.syntheticDimension.delete({
+      where: { id: body.removeDimensionId },
+    })
+  }
+
+  // Toggle tuple inclusion
+  if (body.toggleTupleId) {
+    await prisma.syntheticTuple.update({
+      where: { id: body.toggleTupleId },
+      data: { included: body.included ?? false },
+    })
+  }
+
+  // Batch update tuple inclusion
   if (body.tupleUpdates && Array.isArray(body.tupleUpdates)) {
     for (const update of body.tupleUpdates) {
       await prisma.syntheticTuple.update({
@@ -42,5 +73,14 @@ export async function PATCH(
     }
   }
 
-  return NextResponse.json({ ok: true })
+  const updated = await prisma.syntheticDataConfig.findUnique({
+    where: { id: params.id },
+    include: {
+      evalSuite: { select: { id: true, name: true, type: true } },
+      dimensions: { orderBy: { order: 'asc' } },
+      generatedTuples: { orderBy: { createdAt: 'asc' } },
+    },
+  })
+
+  return NextResponse.json(updated)
 }

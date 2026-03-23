@@ -107,6 +107,10 @@ export default function WizardPage() {
   // Save state
   const [saveResult, setSaveResult] = useState<SaveResult | null>(null)
 
+  // Smoke auto-run state
+  const [smokeRunning, setSmokeRunning] = useState(false)
+  const [smokeResult, setSmokeResult] = useState<{ runId: string; status: string; passRate?: number } | null>(null)
+
   // Draft history
   const [drafts, setDrafts] = useState<Array<{ id: string; intent: string; mode: string; status: string; createdAt: string }>>([])
   const [showDrafts, setShowDrafts] = useState(false)
@@ -247,6 +251,53 @@ export default function WizardPage() {
       setError(err instanceof Error ? err.message : 'Save failed')
       setStep('review')
     }
+  }
+
+  const handleSmokeRun = async () => {
+    if (!saveResult || saveResult.suites.length === 0) return
+    setSmokeRunning(true)
+    try {
+      // Create an eval run using the first suite (trigger suite)
+      const suite = saveResult.suites[0]
+      const res = await fetch('/api/eval-runs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          skillRepoId: saveResult.repo.id,
+          skillVersionId: saveResult.version.id,
+          suiteId: suite.id,
+          executorType: 'mock',
+          splitFilter: 'train',
+        }),
+      })
+      if (!res.ok) throw new Error('Failed to create smoke run')
+      const run = await res.json()
+
+      // Start the run
+      await fetch(`/api/eval-runs/${run.id}/start`, { method: 'POST' })
+
+      // Poll for completion (max 60s)
+      let status = 'running'
+      let passRate: number | undefined
+      for (let i = 0; i < 30; i++) {
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        const pollRes = await fetch(`/api/eval-runs/${run.id}`)
+        if (!pollRes.ok) break
+        const pollData = await pollRes.json()
+        status = pollData.status
+        if (status === 'completed' || status === 'failed') {
+          try {
+            const metrics = JSON.parse(pollData.metricsJson || '{}')
+            passRate = metrics.passRate
+          } catch { /* ignore */ }
+          break
+        }
+      }
+      setSmokeResult({ runId: run.id, status, passRate })
+    } catch {
+      setSmokeResult({ runId: '', status: 'error' })
+    }
+    setSmokeRunning(false)
   }
 
   const handleStartOver = () => {
@@ -1007,6 +1058,50 @@ export default function WizardPage() {
                 {saveResult.suites.map(s => `${s.name} (${s.caseCount} cases)`).join(', ')}
               </p>
             </div>
+          </div>
+
+          {/* Smoke auto-run */}
+          <div className="border border-border rounded-lg p-4 bg-card">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-medium text-sm">Smoke Eval Run</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Auto-run the first eval suite with mock executor to verify eval pipeline works
+                </p>
+              </div>
+              {!smokeResult && (
+                <button
+                  onClick={handleSmokeRun}
+                  disabled={smokeRunning}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {smokeRunning ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> Running...</>
+                  ) : (
+                    <><TestTube className="h-4 w-4" /> Run Smoke Eval</>
+                  )}
+                </button>
+              )}
+            </div>
+            {smokeResult && (
+              <div className={`mt-3 p-3 rounded text-sm ${
+                smokeResult.status === 'completed' ? 'bg-green-500/10 text-green-400' :
+                smokeResult.status === 'error' ? 'bg-red-500/10 text-red-400' :
+                'bg-yellow-500/10 text-yellow-400'
+              }`}>
+                {smokeResult.status === 'completed' ? (
+                  <>Smoke run completed. Pass rate: {smokeResult.passRate !== undefined ? `${Math.round(smokeResult.passRate * 100)}%` : 'N/A'}.{' '}
+                    <a href={`/evals/runs/${smokeResult.runId}`} className="underline">View run</a>
+                  </>
+                ) : smokeResult.status === 'error' ? (
+                  'Smoke run failed to start. You can run evals manually from the Evals page.'
+                ) : (
+                  <>Smoke run status: {smokeResult.status}.{' '}
+                    {smokeResult.runId && <a href={`/evals/runs/${smokeResult.runId}`} className="underline">View run</a>}
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center justify-center gap-3">

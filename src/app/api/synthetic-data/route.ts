@@ -9,9 +9,9 @@ export async function GET(request: NextRequest) {
     where: suiteId ? { evalSuiteId: suiteId } : undefined,
     orderBy: { createdAt: 'desc' },
     include: {
-      evalSuite: { select: { id: true, name: true } },
+      evalSuite: { select: { id: true, name: true, type: true } },
       dimensions: true,
-      _count: { select: { generatedTuples: true } },
+      _count: { select: { generatedTuples: true, dimensions: true } },
     },
   })
 
@@ -22,9 +22,9 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const { evalSuiteId, name, dimensions } = body
 
-  if (!evalSuiteId || !dimensions || !Array.isArray(dimensions) || dimensions.length === 0) {
+  if (!evalSuiteId) {
     return NextResponse.json(
-      { error: 'evalSuiteId and at least one dimension are required' },
+      { error: 'evalSuiteId is required' },
       { status: 400 }
     )
   }
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Target suite not found' }, { status: 404 })
   }
 
-  // Create config with dimensions in a transaction
+  // Create config with optional dimensions in a transaction
   const config = await prisma.$transaction(async (tx) => {
     const cfg = await tx.syntheticDataConfig.create({
       data: {
@@ -44,32 +44,34 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    for (const dim of dimensions) {
-      await tx.syntheticDimension.create({
-        data: {
-          configId: cfg.id,
-          name: dim.name,
-          values: JSON.stringify(dim.values),
-        },
-      })
-    }
+    if (dimensions && Array.isArray(dimensions) && dimensions.length > 0) {
+      for (const dim of dimensions) {
+        await tx.syntheticDimension.create({
+          data: {
+            configId: cfg.id,
+            name: dim.name,
+            values: JSON.stringify(dim.values),
+          },
+        })
+      }
 
-    // Generate cross-product tuples
-    const tuples = generateCrossProduct(
-      dimensions.map((d: { name: string; values: string[] }) => ({
-        name: d.name,
-        values: d.values,
-      }))
-    )
+      // Generate cross-product tuples
+      const tuples = generateCrossProduct(
+        dimensions.map((d: { name: string; values: string[] }) => ({
+          name: d.name,
+          values: d.values,
+        }))
+      )
 
-    for (const tuple of tuples) {
-      await tx.syntheticTuple.create({
-        data: {
-          configId: cfg.id,
-          dimensionValues: JSON.stringify(tuple),
-          included: true,
-        },
-      })
+      for (const tuple of tuples) {
+        await tx.syntheticTuple.create({
+          data: {
+            configId: cfg.id,
+            dimensionValues: JSON.stringify(tuple),
+            included: true,
+          },
+        })
+      }
     }
 
     return cfg
@@ -78,8 +80,9 @@ export async function POST(request: NextRequest) {
   const full = await prisma.syntheticDataConfig.findUnique({
     where: { id: config.id },
     include: {
+      evalSuite: { select: { id: true, name: true, type: true } },
       dimensions: true,
-      _count: { select: { generatedTuples: true } },
+      _count: { select: { generatedTuples: true, dimensions: true } },
     },
   })
 
