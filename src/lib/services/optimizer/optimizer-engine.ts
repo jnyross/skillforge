@@ -429,16 +429,21 @@ async function evaluateCandidate(
       status: 'completed',
     },
     orderBy: { createdAt: 'desc' },
-    select: { metricsJson: true },
+    select: { metricsJson: true, suiteId: true },
   })
 
-  if (existingRuns.length > 0) {
+  // Only use cached results if ALL requested suites have completed runs
+  const coveredSuiteIds = new Set(existingRuns.map(r => r.suiteId))
+  const allCovered = suiteIds.every(id => coveredSuiteIds.has(id))
+
+  if (allCovered && existingRuns.length > 0) {
     return aggregateMetrics(existingRuns.map(r => JSON.parse(r.metricsJson || '{}')))
   }
 
-  // No existing runs — create and start eval runs
+  // Missing suites — create and start eval runs for uncovered suites
+  const missingSuiteIds = suiteIds.filter(id => !coveredSuiteIds.has(id))
   const runs = []
-  for (const suiteId of suiteIds) {
+  for (const suiteId of missingSuiteIds) {
     const evalRun = await prisma.evalRun.create({
       data: {
         skillRepoId,
@@ -468,8 +473,14 @@ async function evaluateCandidate(
     select: { metricsJson: true },
   })
 
-  if (completedRuns.length > 0) {
-    return aggregateMetrics(completedRuns.map(r => JSON.parse(r.metricsJson || '{}')))
+  // Combine cached results from existing runs with newly completed runs
+  const allMetrics = [
+    ...existingRuns.map(r => JSON.parse(r.metricsJson || '{}')),
+    ...completedRuns.map(r => JSON.parse(r.metricsJson || '{}')),
+  ]
+
+  if (allMetrics.length > 0) {
+    return aggregateMetrics(allMetrics)
   }
 
   return defaultMetrics()
