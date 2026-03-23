@@ -32,6 +32,9 @@ COPY --from=base /app/package.json ./package.json
 COPY --from=base /app/prisma ./prisma
 COPY --from=base /app/public ./public
 COPY --from=base /app/next.config.js ./next.config.js
+COPY --from=base /app/seed ./seed
+COPY --from=base /app/src ./src
+COPY --from=base /app/tsconfig.json ./tsconfig.json
 
 # Create data directory for SQLite and git repos
 RUN mkdir -p /data/skill-repos

@@ -126,26 +126,30 @@ export default function WizardPage() {
     setStep('generating')
 
     try {
-      // 1. Create draft
-      const draftRes = await fetch('/api/wizard/draft', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          intent: intent.trim(),
-          artifactsJson: artifacts,
-          mode: mode || 'scratch',
-          corrections: corrections.trim() ? corrections.trim().split('\n').filter(Boolean) : [],
-          desiredOutputFormat: desiredOutputFormat.trim() || undefined,
-          safetyConstraints: safetyConstraints.trim() || undefined,
-          allowedTools: allowedTools.trim() ? allowedTools.split(',').map((t: string) => t.trim()).filter(Boolean) : [],
-        }),
-      })
-      if (!draftRes.ok) throw new Error('Failed to create draft')
-      const draft = await draftRes.json()
-      setDraftId(draft.id)
+      // 1. Create or reuse draft
+      let currentDraftId = draftId
+      if (!currentDraftId) {
+        const draftRes = await fetch('/api/wizard/draft', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            intent: intent.trim(),
+            artifactsJson: artifacts,
+            mode: mode || 'scratch',
+            corrections: corrections.trim() ? corrections.trim().split('\n').filter(Boolean) : [],
+            desiredOutputFormat: desiredOutputFormat.trim() || undefined,
+            safetyConstraints: safetyConstraints.trim() || undefined,
+            allowedTools: allowedTools.trim() ? allowedTools.split(',').map((t: string) => t.trim()).filter(Boolean) : [],
+          }),
+        })
+        if (!draftRes.ok) throw new Error('Failed to create draft')
+        const draft = await draftRes.json()
+        currentDraftId = draft.id
+        setDraftId(draft.id)
+      }
 
       // 2. Generate skill
-      const genRes = await fetch(`/api/wizard/draft/${draft.id}/generate`, {
+      const genRes = await fetch(`/api/wizard/draft/${currentDraftId}/generate`, {
         method: 'POST',
       })
       if (!genRes.ok) {
@@ -255,6 +259,24 @@ export default function WizardPage() {
         setMode(draftMode)
       }
     } else {
+      // Load full draft data for intake drafts (artifacts, config)
+      try {
+        const res = await fetch(`/api/wizard/draft/${draft.id}`)
+        const data = await res.json()
+        const arts = JSON.parse(data.artifactsJson || '[]')
+        if (Array.isArray(arts) && arts.length > 0) setArtifacts(arts)
+        const config = JSON.parse(data.configJson || '{}')
+        if (Array.isArray(config.corrections) && config.corrections.length > 0) {
+          setCorrections(config.corrections.join('\n'))
+        }
+        if (typeof config.desiredOutputFormat === 'string') setDesiredOutputFormat(config.desiredOutputFormat)
+        if (typeof config.safetyConstraints === 'string') setSafetyConstraints(config.safetyConstraints)
+        if (Array.isArray(config.allowedTools) && config.allowedTools.length > 0) {
+          setAllowedTools(config.allowedTools.join(', '))
+        }
+      } catch {
+        // ignore — proceed with just intent and mode
+      }
       setStep('intake')
       setMode(draftMode)
     }
