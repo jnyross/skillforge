@@ -133,6 +133,11 @@ export default function WizardPage() {
         body: JSON.stringify({
           intent: intent.trim(),
           artifactsJson: artifacts,
+          mode: mode || 'scratch',
+          corrections: corrections.trim() ? corrections.trim().split('\n').filter(Boolean) : [],
+          desiredOutputFormat: desiredOutputFormat.trim() || undefined,
+          safetyConstraints: safetyConstraints.trim() || undefined,
+          allowedTools: allowedTools.trim() ? allowedTools.split(',').map((t: string) => t.trim()).filter(Boolean) : [],
         }),
       })
       if (!draftRes.ok) throw new Error('Failed to create draft')

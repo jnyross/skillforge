@@ -43,19 +43,17 @@ export async function POST(
       // Empty artifacts is fine
     }
 
-    // Determine mode from artifacts
-    let mode: WizardMode = 'scratch'
+    // Use the mode stored in the draft (selected by the user in the UI)
+    const mode: WizardMode = (['extract', 'synthesize', 'hybrid', 'scratch'].includes(draft.mode)
+      ? draft.mode
+      : 'scratch') as WizardMode
 
-    // Check for conversation-type artifacts vs non-conversation artifacts
-    const hasConversations = artifacts.some(a => a.type === 'other' && a.name.toLowerCase().includes('conversation'))
-    const hasNonConversationArtifacts = artifacts.some(a => !(a.type === 'other' && a.name.toLowerCase().includes('conversation')))
-
-    if (hasConversations && hasNonConversationArtifacts) {
-      mode = 'hybrid'
-    } else if (hasConversations) {
-      mode = 'extract'
-    } else if (hasNonConversationArtifacts) {
-      mode = 'synthesize'
+    // Parse advanced config options
+    let config: Record<string, unknown> = {}
+    try {
+      config = JSON.parse(draft.configJson || '{}')
+    } catch {
+      // Ignore parse errors
     }
 
     const input: WizardInput = {
@@ -65,6 +63,10 @@ export async function POST(
       conversations: artifacts
         .filter(a => a.type === 'other' && a.name.toLowerCase().includes('conversation'))
         .map(a => a.content),
+      corrections: Array.isArray(config.corrections) ? config.corrections as string[] : undefined,
+      desiredOutputFormat: typeof config.desiredOutputFormat === 'string' ? config.desiredOutputFormat : undefined,
+      safetyConstraints: typeof config.safetyConstraints === 'string' ? config.safetyConstraints : undefined,
+      allowedTools: Array.isArray(config.allowedTools) ? config.allowedTools as string[] : undefined,
     }
 
     const result = await generateSkillFromWizard(input)
