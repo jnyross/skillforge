@@ -33,6 +33,11 @@ export async function PATCH(
   const body = await request.json()
   const { name, purpose, scope, targetCriterion, model, status, outputSchema } = body
 
+  const existing = await prisma.judgeDefinition.findUnique({ where: { id: params.id } })
+  if (!existing) {
+    return NextResponse.json({ error: 'Judge not found' }, { status: 404 })
+  }
+
   const updated = await prisma.judgeDefinition.update({
     where: { id: params.id },
     data: {
@@ -53,6 +58,11 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const existing = await prisma.judgeDefinition.findUnique({ where: { id: params.id } })
+  if (!existing) {
+    return NextResponse.json({ error: 'Judge not found' }, { status: 404 })
+  }
+
   await prisma.judgeDefinition.delete({ where: { id: params.id } })
   return NextResponse.json({ ok: true })
 }

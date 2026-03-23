@@ -34,6 +34,19 @@ export async function PATCH(
   const body = await request.json()
   const { status, completedPairs } = body
 
+  const existing = await prisma.reviewSession.findUnique({ where: { id: params.id } })
+  if (!existing) {
+    return NextResponse.json({ error: 'Session not found' }, { status: 404 })
+  }
+
+  const validStatuses = ['active', 'completed', 'abandoned']
+  if (status !== undefined && !validStatuses.includes(status)) {
+    return NextResponse.json(
+      { error: `status must be one of: ${validStatuses.join(', ')}` },
+      { status: 400 }
+    )
+  }
+
   const updated = await prisma.reviewSession.update({
     where: { id: params.id },
     data: {

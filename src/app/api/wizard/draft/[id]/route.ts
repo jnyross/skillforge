@@ -23,6 +23,11 @@ export async function PATCH(
   const body = await request.json()
   const { intent, artifactsJson, status, generatedSkill, generatedEvals, smokeResultJson, savedVersionId, savedRepoId } = body
 
+  const existing = await prisma.wizardDraft.findUnique({ where: { id: params.id } })
+  if (!existing) {
+    return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
+  }
+
   const updated = await prisma.wizardDraft.update({
     where: { id: params.id },
     data: {
@@ -44,6 +49,11 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const existing = await prisma.wizardDraft.findUnique({ where: { id: params.id } })
+  if (!existing) {
+    return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
+  }
+
   await prisma.wizardDraft.delete({ where: { id: params.id } })
   return NextResponse.json({ ok: true })
 }
