@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { initSkillGitRepo, createVersion } from '@/lib/services/git-storage'
+import { initSkillGitRepo, createVersion, deleteSkillGitRepo } from '@/lib/services/git-storage'
 
 /**
  * POST /api/wizard/draft/:id/save
@@ -49,24 +49,26 @@ export async function POST(
     // No evals to create
   }
 
+  // Extract skill name from frontmatter
+  const nameMatch = skillMd.match(/^name:\s*(.+)$/m)
+  const skillName = body.repoName || (nameMatch ? nameMatch[1].trim().replace(/^["']|["']$/g, '') : `wizard-skill-${Date.now()}`)
+  const slug = skillName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+  const displayName = skillName.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+
+  // Check for duplicate slug
+  const existingRepo = await prisma.skillRepo.findUnique({ where: { slug } })
+  if (existingRepo) {
+    return NextResponse.json(
+      { error: `A skill repo with slug "${slug}" already exists` },
+      { status: 409 }
+    )
+  }
+
+  let repo: { id: string; slug: string; displayName: string; description: string } | null = null
+
   try {
-    // Extract skill name from frontmatter
-    const nameMatch = skillMd.match(/^name:\s*(.+)$/m)
-    const skillName = body.repoName || (nameMatch ? nameMatch[1].trim().replace(/^["']|["']$/g, '') : `wizard-skill-${Date.now()}`)
-    const slug = skillName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-    const displayName = skillName.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
-
-    // Check for duplicate slug
-    const existingRepo = await prisma.skillRepo.findUnique({ where: { slug } })
-    if (existingRepo) {
-      return NextResponse.json(
-        { error: `A skill repo with slug "${slug}" already exists` },
-        { status: 409 }
-      )
-    }
-
     // 1. Create skill repo
-    const repo = await prisma.skillRepo.create({
+    repo = await prisma.skillRepo.create({
       data: {
         slug,
         displayName,
@@ -206,6 +208,11 @@ export async function POST(
       suites: createdSuites,
     }, { status: 201 })
   } catch (err) {
+    // Compensation: clean up partially created resources
+    if (repo) {
+      try { await deleteSkillGitRepo(repo.id) } catch { /* ignore */ }
+      try { await prisma.skillRepo.delete({ where: { id: repo.id } }) } catch { /* ignore */ }
+    }
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Save failed' },
       { status: 500 }

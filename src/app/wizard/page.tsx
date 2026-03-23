@@ -100,7 +100,7 @@ export default function WizardPage() {
   const [saveResult, setSaveResult] = useState<SaveResult | null>(null)
 
   // Draft history
-  const [drafts, setDrafts] = useState<Array<{ id: string; intent: string; status: string; createdAt: string }>>([])
+  const [drafts, setDrafts] = useState<Array<{ id: string; intent: string; mode: string; status: string; createdAt: string }>>([])
   const [showDrafts, setShowDrafts] = useState(false)
 
   const addArtifact = () => {
@@ -224,10 +224,14 @@ export default function WizardPage() {
     }
   }
 
-  const resumeDraft = async (draft: { id: string; intent: string; status: string }) => {
+  const resumeDraft = async (draft: { id: string; intent: string; mode: string; status: string }) => {
     setDraftId(draft.id)
     setIntent(draft.intent)
     setShowDrafts(false)
+
+    const draftMode = (['extract', 'synthesize', 'hybrid', 'scratch'].includes(draft.mode)
+      ? draft.mode
+      : 'scratch') as WizardMode
 
     if (draft.status === 'review') {
       // Load the generated data
@@ -244,14 +248,15 @@ export default function WizardPage() {
           warnings: evals.warnings || [],
         })
         setEditedSkillMd(data.generatedSkill)
+        setMode(draftMode)
         setStep('review')
       } catch {
         setStep('intake')
-        setMode('scratch')
+        setMode(draftMode)
       }
     } else {
       setStep('intake')
-      setMode('scratch')
+      setMode(draftMode)
     }
   }
 
