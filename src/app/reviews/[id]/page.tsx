@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Play, Download, CheckCircle, XCircle, Clock, Users } from 'lucide-react'
+import { ArrowLeft, Play, Download, CheckCircle, XCircle, Clock, Users, Filter } from 'lucide-react'
+import { RichContentRenderer } from '@/components/rich-content-renderer'
 
 interface Critique {
   id: string
@@ -61,6 +62,8 @@ export default function ReviewSessionDetailPage() {
   const [session, setSession] = useState<ReviewSessionDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'overview' | 'labels' | 'comparisons'>('overview')
+  const [labelFilter, setLabelFilter] = useState<'all' | 'pass' | 'fail'>('all')
+  const [severityFilter, setSeverityFilter] = useState<'all' | 'minor' | 'major' | 'critical'>('all')
 
   const loadSession = useCallback(async () => {
     const res = await fetch(`/api/review-sessions/${id}`)
@@ -268,10 +271,36 @@ export default function ReviewSessionDetailPage() {
 
       {tab === 'labels' && (
         <div className="space-y-3">
+          {/* Filters */}
+          <div className="flex items-center gap-3">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <select
+              className="px-2 py-1 bg-background border border-border rounded text-sm"
+              value={labelFilter}
+              onChange={e => setLabelFilter(e.target.value as 'all' | 'pass' | 'fail')}
+            >
+              <option value="all">All Labels</option>
+              <option value="pass">Pass Only</option>
+              <option value="fail">Fail Only</option>
+            </select>
+            <select
+              className="px-2 py-1 bg-background border border-border rounded text-sm"
+              value={severityFilter}
+              onChange={e => setSeverityFilter(e.target.value as 'all' | 'minor' | 'major' | 'critical')}
+            >
+              <option value="all">All Severities</option>
+              <option value="minor">Minor</option>
+              <option value="major">Major</option>
+              <option value="critical">Critical</option>
+            </select>
+          </div>
           {session.labels.length === 0 ? (
             <p className="text-muted-foreground text-sm">No labels yet. Start reviewing to add labels.</p>
           ) : (
-            session.labels.map(label => (
+            session.labels
+              .filter(l => labelFilter === 'all' || l.label === labelFilter)
+              .filter(l => severityFilter === 'all' || l.critiques.some(c => c.severity === severityFilter))
+              .map(label => (
               <div key={label.id} className="border border-border rounded-lg p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -291,7 +320,9 @@ export default function ReviewSessionDetailPage() {
                 </div>
                 {label.critiques.length > 0 && (
                   <div className="mt-3 space-y-2">
-                    {label.critiques.map(c => (
+                    {label.critiques
+                      .filter(c => severityFilter === 'all' || c.severity === severityFilter)
+                      .map(c => (
                       <div key={c.id} className="text-sm p-2 bg-secondary/50 rounded">
                         <span className={`px-1.5 py-0.5 rounded text-xs mr-2 ${
                           c.severity === 'critical' ? 'bg-red-500/10 text-red-400' :
@@ -301,7 +332,7 @@ export default function ReviewSessionDetailPage() {
                           {c.severity}
                         </span>
                         {c.category && <span className="text-muted-foreground mr-2">[{c.category}]</span>}
-                        {c.content}
+                        <RichContentRenderer content={c.content} maxHeight="200px" />
                       </div>
                     ))}
                   </div>

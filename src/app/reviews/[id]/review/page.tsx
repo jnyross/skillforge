@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, ChevronLeft, ChevronRight, CheckCircle, XCircle, Keyboard } from 'lucide-react'
+import { RichContentRenderer } from '@/components/rich-content-renderer'
 
 interface Critique {
   content: string
@@ -291,15 +292,11 @@ export default function ActiveReviewPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="border border-border rounded-lg p-4">
                     <h3 className="font-medium text-center mb-3 text-blue-400">Output A</h3>
-                    <div className="bg-secondary/30 rounded p-3 min-h-[200px] font-mono text-sm whitespace-pre-wrap">
-                      {session.comparisons[currentIndex].evalCaseRunIdA}
-                    </div>
+                    <RichContentRenderer content={session.comparisons[currentIndex].evalCaseRunIdA} maxHeight="400px" />
                   </div>
                   <div className="border border-border rounded-lg p-4">
                     <h3 className="font-medium text-center mb-3 text-purple-400">Output B</h3>
-                    <div className="bg-secondary/30 rounded p-3 min-h-[200px] font-mono text-sm whitespace-pre-wrap">
-                      {session.comparisons[currentIndex].evalCaseRunIdB}
-                    </div>
+                    <RichContentRenderer content={session.comparisons[currentIndex].evalCaseRunIdB} maxHeight="400px" />
                   </div>
                 </div>
               )}
@@ -378,10 +375,10 @@ export default function ActiveReviewPage() {
           {/* Output display */}
           <div className="border border-border rounded-lg p-4">
             <h3 className="font-medium mb-3">Output to Review</h3>
-            <div className="bg-secondary/30 rounded p-3 min-h-[200px] font-mono text-sm whitespace-pre-wrap">
-              Review item #{currentIndex + 1}
-              {'\n\n'}Add eval case runs to this session to see actual output content here.
-            </div>
+            <RichContentRenderer 
+              content={`Review item #${currentIndex + 1}\n\nAdd eval case runs to this session to see actual output content here.`}
+              maxHeight="400px"
+            />
           </div>
 
           {/* Critique input */}
