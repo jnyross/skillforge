@@ -124,10 +124,11 @@ export async function POST(
       },
     })
 
-    // Create tags if provided
+    // Create tags if provided (deduplicate to avoid unique constraint violation)
     if (tags && tags.length > 0) {
+      const uniqueTags = Array.from(new Set(tags))
       await prisma.versionTag.createMany({
-        data: tags.map(name => ({
+        data: uniqueTags.map(name => ({
           skillVersionId: version.id,
           name,
         })),

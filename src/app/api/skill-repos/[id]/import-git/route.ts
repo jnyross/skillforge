@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { createVersion } from '@/lib/services/git-storage'
+import { createVersion, getGit } from '@/lib/services/git-storage'
 import { parseSkillMd, estimateTokenCount, countLines } from '@/lib/services/skill-parser'
 import { lintSkill } from '@/lib/validators/skill-linter'
 import type { SkillFile } from '@/types/skill'
@@ -63,6 +63,7 @@ export async function POST(
   })
 
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'skillforge-git-import-'))
+  let previousHead: string | undefined
 
   try {
     // Clone the repository using simple-git (safe from shell injection)
@@ -122,6 +123,14 @@ export async function POST(
     }
 
     const commitMessage = message || `Import from ${url}`
+
+    // Capture current HEAD for compensation on failure
+    const internalGit = getGit(repo.gitRepoPath)
+    try {
+      previousHead = (await internalGit.revparse(['HEAD'])).trim()
+    } catch {
+      // No commits yet
+    }
 
     // Create git commit in internal repo
     const commitSha = await createVersion(
@@ -201,6 +210,15 @@ export async function POST(
       importLog: { id: importLog.id, status: 'completed' },
     }, { status: 201 })
   } catch (err) {
+    // Compensate: reset git branch to previous HEAD
+    if (previousHead) {
+      try {
+        const internalGit = getGit(repo.gitRepoPath)
+        await internalGit.reset(['--hard', previousHead])
+      } catch (resetErr) {
+        console.error('Failed to reset git HEAD after DB error:', resetErr)
+      }
+    }
     const errMsg = err instanceof Error ? err.message : String(err)
     await prisma.gitImportLog.update({
       where: { id: importLog.id },
