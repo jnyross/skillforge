@@ -51,12 +51,21 @@ export async function GET() {
         skillRepoId: { in: repoIds },
         status: 'completed',
       },
-      select: { skillRepoId: true, suiteId: true, metricsJson: true },
+      select: { skillRepoId: true, suiteId: true, metricsJson: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
     }).then((runs) => {
       const failingCounts = new Map<string, number>()
-      // Group by skillRepoId and count unique failing suites
-      const bySuite = new Map<string, Set<string>>()
+      // Keep only the latest run per (skillRepoId, suiteId) pair
+      const latestBySuite = new Map<string, typeof runs[0]>()
       for (const run of runs) {
+        const key = `${run.skillRepoId}:${run.suiteId}`
+        if (!latestBySuite.has(key)) {
+          latestBySuite.set(key, run) // Already sorted desc, so first seen = latest
+        }
+      }
+      // Count unique failing suites per repo (only based on latest run)
+      const bySuite = new Map<string, Set<string>>()
+      for (const run of Array.from(latestBySuite.values())) {
         try {
           const metrics = JSON.parse(run.metricsJson || '{}')
           if (metrics.passRate !== undefined && metrics.passRate < 1.0) {

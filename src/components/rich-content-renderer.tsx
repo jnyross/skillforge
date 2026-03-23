@@ -20,9 +20,9 @@ function detectContentType(content: string): 'json' | 'code' | 'diff' | 'markdow
     } catch { /* not json */ }
   }
   
-  // Diff detection
-  if (trimmed.startsWith('diff --git') || trimmed.startsWith('---') || 
-      /^[+-]{3}\s/.test(trimmed) || /^@@\s/.test(trimmed)) {
+  // Diff detection (avoid matching YAML frontmatter '---' or markdown horizontal rules)
+  if (trimmed.startsWith('diff --git') || 
+      /^---\s+a\//.test(trimmed) || /^@@\s/.test(trimmed)) {
     return 'diff'
   }
   
