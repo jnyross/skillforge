@@ -346,7 +346,7 @@ async function executeTriggerCase(
         select: { skillVersionId: true },
       }))!.skillVersionId,
       status: result.passed ? 'passed' : 'failed',
-      triggerResult: result.passed,
+      triggerResult: triggerRate >= 0.5,
       durationMs: runs.reduce((s, r) => s + r.durationMs, 0),
       outputJson: JSON.stringify(result),
     },
@@ -365,6 +365,7 @@ async function executeOutputCase(
     prompt: string
     expectedOutcome: string
     configJson: string
+    tags: string
     fixtures: Array<{ name: string; type: string; content: string; path: string }>
   },
   repoPath: string,
@@ -457,16 +458,7 @@ async function executeOutputCase(
       })
     }
 
-    const tags = evalCase.configJson
-      ? (() => {
-          try {
-            const cfg = JSON.parse(evalCase.configJson)
-            return cfg.tags ?? []
-          } catch {
-            return []
-          }
-        })()
-      : []
+    const tags = evalCase.tags ? evalCase.tags.split(',').map(t => t.trim()) : []
 
     return {
       caseId: evalCase.id,
@@ -476,7 +468,7 @@ async function executeOutputCase(
         ? output.usage.inputTokens + output.usage.outputTokens
         : 0,
       costUsd: output.costUsd ?? 0,
-      tags: typeof tags === 'string' ? tags.split(',').map((t: string) => t.trim()) : tags,
+      tags,
       assertionResults: assertionResults.results.map(ar => ({
         type: ar.type,
         passed: ar.passed,
