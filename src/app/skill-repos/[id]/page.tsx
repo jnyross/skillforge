@@ -148,9 +148,9 @@ export default function SkillRepoPage() {
         }
       } catch { /* ignore */ }
 
-      // Load linked review sessions
+      // Load linked review sessions (scoped to repo, not version — ReviewSession has no skillVersionId)
       try {
-        const reviewsRes = await fetch(`/api/review-sessions?skillVersionId=${versionId}`)
+        const reviewsRes = await fetch(`/api/review-sessions?skillRepoId=${repoId}`)
         if (reviewsRes.ok) {
           const reviewsData = await reviewsRes.json()
           setLinkedReviews(Array.isArray(reviewsData) ? reviewsData : reviewsData.sessions || [])

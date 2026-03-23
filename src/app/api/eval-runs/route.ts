@@ -5,11 +5,13 @@ import { logAuditEvent } from '@/lib/services/audit-log'
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const skillRepoId = searchParams.get('skillRepoId')
+  const skillVersionId = searchParams.get('skillVersionId')
   const suiteId = searchParams.get('suiteId')
   const status = searchParams.get('status')
 
   const where: Record<string, string> = {}
   if (skillRepoId) where.skillRepoId = skillRepoId
+  if (skillVersionId) where.skillVersionId = skillVersionId
   if (suiteId) where.suiteId = suiteId
   if (status) where.status = status
 
