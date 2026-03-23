@@ -7,21 +7,30 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model SkillRepo {
-  id                      String         @id @default(uuid())
-  slug                    String         @unique
-  displayName             String
-  description             String         @default("")
-  defaultBranch           String         @default("main")
-  currentChampionVersionId String?
-  gitRepoPath             String
-  createdAt               DateTime       @default(now())
-  updatedAt               DateTime       @updatedAt
+// =============================================================================
+// Core entities
+// =============================================================================
 
-  currentChampionVersion  SkillVersion?  @relation("ChampionVersion", fields: [currentChampionVersionId], references: [id], onDelete: SetNull)
-  versions                SkillVersion[] @relation("RepoVersions")
-  lintResults             LintResult[]
-  gitImportLogs           GitImportLog[]
+model SkillRepo {
+  id                       String         @id @default(uuid())
+  slug                     String         @unique
+  displayName              String
+  description              String         @default("")
+  defaultBranch            String         @default("main")
+  currentChampionVersionId String?
+  gitRepoPath              String
+  createdAt                DateTime       @default(now())
+  updatedAt                DateTime       @updatedAt
+
+  currentChampionVersion   SkillVersion?  @relation("ChampionVersion", fields: [currentChampionVersionId], references: [id], onDelete: SetNull)
+  versions                 SkillVersion[] @relation("RepoVersions")
+  lintResults              LintResult[]
+  gitImportLogs            GitImportLog[]
+  evalSuites               EvalSuite[]
+  evalRuns                 EvalRun[]
+  optimizerRuns            OptimizerRun[]
+  reviewSessions           ReviewSession[]
+  benchmarkSnapshots       BenchmarkSnapshot[]
 }
 
 model SkillVersion {
@@ -36,6 +45,7 @@ model SkillVersion {
   tokenCount      Int       @default(0)
   lineCount       Int       @default(0)
   fileCount       Int       @default(0)
+  linterScore     Float?
   isChampion      Boolean   @default(false)
   notes           String    @default("")
 
@@ -45,6 +55,12 @@ model SkillVersion {
   childVersions   SkillVersion[] @relation("VersionLineage")
   lintResults     LintResult[]
   tags            VersionTag[]
+  evalRuns        EvalRun[]    @relation("VersionEvalRuns")
+  baselineEvalRuns EvalRun[]   @relation("BaselineEvalRuns")
+  evalCaseRuns    EvalCaseRun[]
+  traces          Trace[]
+  candidateVersions OptimizerCandidate[] @relation("CandidateVersion")
+  parentCandidates  OptimizerCandidate[] @relation("CandidateParentVersion")
 
   @@index([skillRepoId, createdAt])
   @@index([skillRepoId, branchName, createdAt])
@@ -82,8 +98,8 @@ model LintResult {
   id              String    @id @default(uuid())
   skillRepoId     String
   skillVersionId  String?
-  severity        String    // "error" | "warning" | "info"
-  category        String    // scorecard category
+  severity        String    // error | warning | info
+  category        String
   rule            String
   message         String
   file            String    @default("SKILL.md")
@@ -96,4 +112,550 @@ model LintResult {
 
   @@index([skillRepoId])
   @@index([skillVersionId])
+}
+
+// =============================================================================
+// Eval entities
+// =============================================================================
+
+model EvalSuite {
+  id              String     @id @default(uuid())
+  skillRepoId     String
+  name            String
+  type            String     // trigger | output | workflow | regression | blind | calibration
+  splitPolicy     String     @default("random") // random | manual | hash
+  version         Int        @default(1)
+  frozen          Boolean    @default(false)
+  description     String     @default("")
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  skillRepo       SkillRepo  @relation(fields: [skillRepoId], references: [id], onDelete: Cascade)
+  cases           EvalCase[]
+  evalRuns        EvalRun[]
+
+  @@unique([skillRepoId, name])
+  @@index([skillRepoId])
+}
+
+model EvalCase {
+  id              String     @id @default(uuid())
+  evalSuiteId     String
+  key             String
+  name            String
+  prompt          String
+  shouldTrigger   Boolean?
+  expectedOutcome String     @default("")
+  split           String     @default("train") // train | validation | holdout
+  tags            String     @default("")
+  configJson      String     @default("{}")
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  evalSuite       EvalSuite  @relation(fields: [evalSuiteId], references: [id], onDelete: Cascade)
+  fixtures        EvalCaseFixture[]
+  caseRuns        EvalCaseRun[]
+
+  @@unique([evalSuiteId, key])
+  @@index([evalSuiteId])
+}
+
+model EvalCaseFixture {
+  id              String     @id @default(uuid())
+  evalCaseId      String
+  name            String
+  type            String     // file | directory | env | config
+  content         String
+  path            String     @default("")
+  createdAt       DateTime   @default(now())
+
+  evalCase        EvalCase   @relation(fields: [evalCaseId], references: [id], onDelete: Cascade)
+
+  @@index([evalCaseId])
+}
+
+model EvalRun {
+  id                String     @id @default(uuid())
+  skillRepoId       String
+  skillVersionId    String
+  baselineVersionId String?
+  suiteId           String
+  executorType      String     @default("claude-cli") // claude-cli | mock
+  claudeVersion     String     @default("")
+  model             String     @default("claude-sonnet-4-20250514")
+  effort            String     @default("medium")
+  permissionMode    String     @default("default")
+  maxTurns          Int        @default(10)
+  status            String     @default("queued") // queued | running | completed | failed | cancelled
+  startedAt         DateTime?
+  completedAt       DateTime?
+  metricsJson       String     @default("{}")
+  error             String?
+  jobId             String?
+  createdAt         DateTime   @default(now())
+
+  skillRepo         SkillRepo    @relation(fields: [skillRepoId], references: [id], onDelete: Cascade)
+  skillVersion      SkillVersion @relation("VersionEvalRuns", fields: [skillVersionId], references: [id])
+  baselineVersion   SkillVersion? @relation("BaselineEvalRuns", fields: [baselineVersionId], references: [id])
+  suite             EvalSuite    @relation(fields: [suiteId], references: [id])
+  caseRuns          EvalCaseRun[]
+  benchmarkSnapshots BenchmarkSnapshot[]
+  traces            Trace[]
+
+  @@index([skillRepoId])
+  @@index([skillVersionId])
+  @@index([suiteId])
+  @@index([status])
+}
+
+model EvalCaseRun {
+  id              String     @id @default(uuid())
+  evalRunId       String
+  evalCaseId      String
+  skillVersionId  String
+  attempt         Int        @default(1)
+  status          String     @default("pending") // pending | running | passed | failed | error | skipped
+  durationMs      Int?
+  costUsd         Float?
+  tokenUsage      String     @default("{}")
+  triggerResult   Boolean?
+  outputJson      String     @default("{}")
+  error           String?
+  traceId         String?
+  createdAt       DateTime   @default(now())
+
+  evalRun         EvalRun    @relation(fields: [evalRunId], references: [id], onDelete: Cascade)
+  evalCase        EvalCase   @relation(fields: [evalCaseId], references: [id])
+  skillVersion    SkillVersion @relation(fields: [skillVersionId], references: [id])
+  assertions      AssertionResult[]
+  trace           Trace?     @relation("CaseRunTrace", fields: [traceId], references: [id])
+
+  @@index([evalRunId])
+  @@index([evalCaseId])
+  @@index([status])
+}
+
+model AssertionResult {
+  id              String     @id @default(uuid())
+  evalCaseRunId   String
+  name            String
+  type            String     // exact | contains | regex | json-schema | file-exists | custom
+  expected        String     @default("")
+  actual          String     @default("")
+  passed          Boolean
+  message         String     @default("")
+  durationMs      Int?
+  createdAt       DateTime   @default(now())
+
+  evalCaseRun     EvalCaseRun @relation(fields: [evalCaseRunId], references: [id], onDelete: Cascade)
+
+  @@index([evalCaseRunId])
+}
+
+model BenchmarkSnapshot {
+  id              String     @id @default(uuid())
+  skillRepoId     String
+  evalRunId       String
+  totalCases      Int        @default(0)
+  passedCases     Int        @default(0)
+  failedCases     Int        @default(0)
+  errorCases      Int        @default(0)
+  skippedCases    Int        @default(0)
+  passRate        Float      @default(0)
+  avgDurationMs   Float?
+  totalCostUsd    Float?
+  metricsJson     String     @default("{}")
+  createdAt       DateTime   @default(now())
+
+  skillRepo       SkillRepo  @relation(fields: [skillRepoId], references: [id], onDelete: Cascade)
+  evalRun         EvalRun    @relation(fields: [evalRunId], references: [id], onDelete: Cascade)
+
+  @@index([skillRepoId])
+  @@index([evalRunId])
+}
+
+// =============================================================================
+// Review entities
+// =============================================================================
+
+model ReviewSession {
+  id              String     @id @default(uuid())
+  skillRepoId     String
+  name            String
+  type            String     // blind-ab | pass-fail
+  reviewer        String     @default("user")
+  status          String     @default("active") // active | completed | abandoned
+  totalPairs      Int        @default(0)
+  completedPairs  Int        @default(0)
+  configJson      String     @default("{}")
+  createdAt       DateTime   @default(now())
+  completedAt     DateTime?
+
+  skillRepo       SkillRepo  @relation(fields: [skillRepoId], references: [id], onDelete: Cascade)
+  comparisons     PairwiseComparison[]
+  labels          ReviewLabel[]
+
+  @@index([skillRepoId])
+  @@index([status])
+}
+
+model PairwiseComparison {
+  id                String     @id @default(uuid())
+  reviewSessionId   String
+  evalCaseRunIdA    String
+  evalCaseRunIdB    String
+  versionIdA        String
+  versionIdB        String
+  order             Int        @default(0)
+  createdAt         DateTime   @default(now())
+
+  reviewSession     ReviewSession @relation(fields: [reviewSessionId], references: [id], onDelete: Cascade)
+  votes             PreferenceVote[]
+
+  @@index([reviewSessionId])
+}
+
+model PreferenceVote {
+  id                String     @id @default(uuid())
+  comparisonId      String
+  selectedWinner    String     // A | B | tie | both-bad
+  confidence        Float      @default(0.5)
+  durationMs        Int?
+  createdAt         DateTime   @default(now())
+
+  comparison        PairwiseComparison @relation(fields: [comparisonId], references: [id], onDelete: Cascade)
+
+  @@index([comparisonId])
+}
+
+model ReviewLabel {
+  id                String     @id @default(uuid())
+  reviewSessionId   String
+  evalCaseRunId     String
+  label             String     // pass | fail
+  confidence        Float      @default(0.5)
+  createdAt         DateTime   @default(now())
+
+  reviewSession     ReviewSession @relation(fields: [reviewSessionId], references: [id], onDelete: Cascade)
+  critiques         Critique[]
+
+  @@index([reviewSessionId])
+  @@index([evalCaseRunId])
+}
+
+model Critique {
+  id              String     @id @default(uuid())
+  reviewLabelId   String
+  content         String
+  category        String     @default("")
+  severity        String     @default("minor") // minor | major | critical
+  createdAt       DateTime   @default(now())
+
+  reviewLabel     ReviewLabel @relation(fields: [reviewLabelId], references: [id], onDelete: Cascade)
+
+  @@index([reviewLabelId])
+}
+
+// =============================================================================
+// Judge entities
+// =============================================================================
+
+model JudgeDefinition {
+  id                  String     @id @default(uuid())
+  name                String     @unique
+  purpose             String     @default("")
+  scope               String     @default("")
+  targetCriterion     String     @default("")
+  model               String     @default("claude-sonnet-4-20250514")
+  outputSchema        String     @default("{}")
+  status              String     @default("draft") // draft | candidate | calibrated | deprecated
+  calibrationDatasetVersion String?
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  promptVersions      JudgePromptVersion[]
+  calibrationRuns     JudgeCalibrationRun[]
+  examples            JudgeExample[]
+}
+
+model JudgePromptVersion {
+  id                String     @id @default(uuid())
+  judgeId           String
+  version           Int        @default(1)
+  systemPrompt      String
+  userPromptTemplate String
+  active            Boolean    @default(true)
+  createdAt         DateTime   @default(now())
+
+  judge             JudgeDefinition @relation(fields: [judgeId], references: [id], onDelete: Cascade)
+  calibrationRuns   JudgeCalibrationRun[]
+
+  @@unique([judgeId, version])
+  @@index([judgeId])
+}
+
+model JudgeCalibrationRun {
+  id                  String     @id @default(uuid())
+  judgeId             String
+  promptVersionId     String
+  status              String     @default("pending") // pending | running | completed | failed
+  totalExamples       Int        @default(0)
+  truePositives       Int        @default(0)
+  trueNegatives       Int        @default(0)
+  falsePositives      Int        @default(0)
+  falseNegatives      Int        @default(0)
+  precision           Float?
+  recall              Float?
+  agreementRate       Float?
+  metricsJson         String     @default("{}")
+  jobId               String?
+  createdAt           DateTime   @default(now())
+  completedAt         DateTime?
+
+  judge               JudgeDefinition @relation(fields: [judgeId], references: [id], onDelete: Cascade)
+  promptVersion       JudgePromptVersion @relation(fields: [promptVersionId], references: [id])
+
+  @@index([judgeId])
+  @@index([promptVersionId])
+}
+
+model JudgeExample {
+  id              String     @id @default(uuid())
+  judgeId         String
+  input           String
+  expectedLabel   String     // pass | fail
+  humanCritique   String     @default("")
+  split           String     @default("train") // train | validation | holdout
+  createdAt       DateTime   @default(now())
+
+  judge           JudgeDefinition @relation(fields: [judgeId], references: [id], onDelete: Cascade)
+
+  @@index([judgeId])
+  @@index([split])
+}
+
+// =============================================================================
+// Optimizer entities
+// =============================================================================
+
+model OptimizerRun {
+  id                String     @id @default(uuid())
+  skillRepoId       String
+  baselineVersionId String
+  suiteIds          String     @default("")
+  maxIterations     Int        @default(10)
+  maxBudgetUsd      Float?
+  status            String     @default("queued") // queued | running | completed | stopped | failed
+  currentIteration  Int        @default(0)
+  objectiveJson     String     @default("{}")
+  promotionRules    String     @default("{}")
+  jobId             String?
+  createdAt         DateTime   @default(now())
+  startedAt         DateTime?
+  completedAt       DateTime?
+
+  skillRepo         SkillRepo  @relation(fields: [skillRepoId], references: [id], onDelete: Cascade)
+  candidates        OptimizerCandidate[]
+  decisions         OptimizerDecision[]
+
+  @@index([skillRepoId])
+  @@index([status])
+}
+
+model OptimizerCandidate {
+  id                  String     @id @default(uuid())
+  optimizerRunId      String
+  parentVersionId     String
+  candidateVersionId  String?
+  mutationType        String
+  rationale           String     @default("")
+  patchDiff           String     @default("")
+  status              String     @default("queued") // queued | running | keep | discard | crash | blocked
+  objectiveJson       String     @default("{}")
+  runBudgetUsd        Float?
+  error               String?
+  createdAt           DateTime   @default(now())
+  completedAt         DateTime?
+
+  optimizerRun        OptimizerRun @relation(fields: [optimizerRunId], references: [id], onDelete: Cascade)
+  parentVersion       SkillVersion @relation("CandidateParentVersion", fields: [parentVersionId], references: [id])
+  candidateVersion    SkillVersion? @relation("CandidateVersion", fields: [candidateVersionId], references: [id])
+  mutations           OptimizerMutation[]
+
+  @@index([optimizerRunId])
+  @@index([status])
+}
+
+model OptimizerMutation {
+  id                String     @id @default(uuid())
+  candidateId       String
+  operator          String
+  target            String     @default("")
+  beforeSnippet     String     @default("")
+  afterSnippet      String     @default("")
+  createdAt         DateTime   @default(now())
+
+  candidate         OptimizerCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId])
+}
+
+model OptimizerDecision {
+  id                String     @id @default(uuid())
+  optimizerRunId    String
+  candidateId       String?
+  decision          String     // keep | discard | crash | promote | stop
+  reason            String     @default("")
+  metricsJson       String     @default("{}")
+  humanApproved     Boolean    @default(false)
+  createdAt         DateTime   @default(now())
+
+  optimizerRun      OptimizerRun @relation(fields: [optimizerRunId], references: [id], onDelete: Cascade)
+
+  @@index([optimizerRunId])
+}
+
+// =============================================================================
+// Trace entities
+// =============================================================================
+
+model Trace {
+  id              String     @id @default(uuid())
+  evalRunId       String?
+  skillVersionId  String?
+  sessionId       String     @default("")
+  model           String     @default("")
+  prompt          String     @default("")
+  totalDurationMs Int?
+  totalCostUsd    Float?
+  totalTokens     Int?
+  inputTokens     Int?
+  outputTokens    Int?
+  status          String     @default("pending") // pending | running | completed | failed
+  resultJson      String     @default("{}")
+  error           String?
+  createdAt       DateTime   @default(now())
+  completedAt     DateTime?
+
+  evalRun         EvalRun?       @relation(fields: [evalRunId], references: [id], onDelete: SetNull)
+  skillVersion    SkillVersion? @relation(fields: [skillVersionId], references: [id])
+  toolEvents      ToolEvent[]
+  artifacts       RunArtifact[]
+  logChunks       LogChunk[]
+  caseRuns        EvalCaseRun[] @relation("CaseRunTrace")
+
+  @@index([evalRunId])
+  @@index([skillVersionId])
+  @@index([status])
+}
+
+model ToolEvent {
+  id              String     @id @default(uuid())
+  traceId         String
+  toolName        String
+  input           String     @default("")
+  output          String     @default("")
+  durationMs      Int?
+  sequence        Int        @default(0)
+  createdAt       DateTime   @default(now())
+
+  trace           Trace      @relation(fields: [traceId], references: [id], onDelete: Cascade)
+
+  @@index([traceId])
+  @@index([traceId, sequence])
+}
+
+model RunArtifact {
+  id              String     @id @default(uuid())
+  traceId         String
+  name            String
+  type            String     // file | directory | stdout | stderr | json
+  path            String     @default("")
+  content         String     @default("")
+  sizeBytes       Int        @default(0)
+  createdAt       DateTime   @default(now())
+
+  trace           Trace      @relation(fields: [traceId], references: [id], onDelete: Cascade)
+
+  @@index([traceId])
+}
+
+model LogChunk {
+  id              String     @id @default(uuid())
+  traceId         String
+  stream          String     @default("stdout") // stdout | stderr | system
+  content         String
+  sequence        Int        @default(0)
+  timestamp       DateTime   @default(now())
+
+  trace           Trace      @relation(fields: [traceId], references: [id], onDelete: Cascade)
+
+  @@index([traceId])
+  @@index([traceId, sequence])
+}
+
+// =============================================================================
+// Wizard entities
+// =============================================================================
+
+model WizardDraft {
+  id              String     @id @default(uuid())
+  intent          String     @default("")
+  artifactsJson   String     @default("[]")
+  status          String     @default("intake") // intake | generating | review | saved | abandoned
+  generatedSkill  String     @default("")
+  generatedEvals  String     @default("{}")
+  smokeResultJson String     @default("{}")
+  savedVersionId  String?
+  savedRepoId     String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+}
+
+// =============================================================================
+// Infrastructure entities
+// =============================================================================
+
+model JobRecord {
+  id              String     @id @default(uuid())
+  type            String     // eval-run | calibration | optimizer | wizard-generate
+  status          String     @default("queued") // queued | running | completed | failed | cancelled
+  payload         String     @default("{}")
+  result          String     @default("{}")
+  error           String?
+  attempts        Int        @default(0)
+  maxAttempts     Int        @default(3)
+  priority        Int        @default(0)
+  createdAt       DateTime   @default(now())
+  startedAt       DateTime?
+  completedAt     DateTime?
+
+  @@index([type, status])
+  @@index([status])
+}
+
+model ExecutorConfig {
+  id              String     @id @default(uuid())
+  name            String     @unique
+  type            String     // claude-cli | mock
+  isDefault       Boolean    @default(false)
+  configJson      String     @default("{}")
+  status          String     @default("active") // active | disabled
+  lastHealthCheck DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+}
+
+model AuditLog {
+  id              String     @id @default(uuid())
+  action          String
+  entityType      String     @default("")
+  entityId        String     @default("")
+  actor           String     @default("user")
+  details         String     @default("{}")
+  createdAt       DateTime   @default(now())
+
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([createdAt])
 }
