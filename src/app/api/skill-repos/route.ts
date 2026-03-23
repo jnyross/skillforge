@@ -16,6 +16,9 @@ export async function GET() {
         orderBy: { createdAt: 'desc' },
         take: 1,
       },
+      lintResults: {
+        select: { severity: true },
+      },
       _count: {
         select: { versions: true },
       },

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Plus, GitBranch, FileText, Clock } from 'lucide-react'
+import { Plus, GitBranch, FileText, Clock, AlertCircle, AlertTriangle, CheckCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -27,6 +27,9 @@ interface SkillRepo {
     isChampion: boolean
     fileCount: number
     lineCount: number
+  }>
+  lintResults: Array<{
+    severity: string
   }>
   _count: {
     versions: number
@@ -220,6 +223,24 @@ export default function HomePage() {
                             </CardDescription>
                           </div>
                           <div className="flex items-center gap-2">
+                            {repo.lintResults && repo.lintResults.some(r => r.severity === 'error') && (
+                              <Badge variant="destructive" className="flex items-center gap-1">
+                                <AlertCircle className="h-3 w-3" />
+                                {repo.lintResults.filter(r => r.severity === 'error').length} errors
+                              </Badge>
+                            )}
+                            {repo.lintResults && !repo.lintResults.some(r => r.severity === 'error') && repo.lintResults.some(r => r.severity === 'warning') && (
+                              <Badge variant="outline" className="flex items-center gap-1 border-yellow-500/50 text-yellow-500">
+                                <AlertTriangle className="h-3 w-3" />
+                                {repo.lintResults.filter(r => r.severity === 'warning').length} warnings
+                              </Badge>
+                            )}
+                            {repo.lintResults && repo.lintResults.length > 0 && !repo.lintResults.some(r => r.severity === 'error') && !repo.lintResults.some(r => r.severity === 'warning') && (
+                              <Badge variant="outline" className="flex items-center gap-1 border-green-500/50 text-green-500">
+                                <CheckCircle className="h-3 w-3" />
+                                Clean
+                              </Badge>
+                            )}
                             {repo.currentChampionVersionId && (
                               <Badge variant="success">Champion</Badge>
                             )}
@@ -249,6 +270,10 @@ export default function HomePage() {
                               </span>
                             </>
                           )}
+                          <span className="flex items-center gap-1 ml-auto">
+                            <Clock className="h-3 w-3" />
+                            Updated {new Date(repo.updatedAt).toLocaleDateString()}
+                          </span>
                         </div>
                       </CardContent>
                     </Card>

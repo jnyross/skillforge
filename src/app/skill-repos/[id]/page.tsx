@@ -6,7 +6,7 @@ import Link from 'next/link'
 import {
   ArrowLeft, GitCommit, FileText, Clock, Plus, RotateCcw,
   AlertTriangle, AlertCircle, Info, CheckCircle, GitBranch,
-  Diff
+  Diff, Upload, Download, Hash, Type, BarChart3
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -80,7 +80,14 @@ export default function SkillRepoPage() {
   const [loading, setLoading] = useState(true)
   const [selectedVersion, setSelectedVersion] = useState<VersionDetail | null>(null)
   const [loadingVersion, setLoadingVersion] = useState(false)
-  const [activeTab, setActiveTab] = useState('files')
+  const [activeTab, setActiveTab] = useState('overview')
+
+  // Import dialog
+  const [importOpen, setImportOpen] = useState(false)
+  const [importMode, setImportMode] = useState<'files' | 'zip'>('files')
+  const [importFiles, setImportFiles] = useState('')
+  const [importMessage, setImportMessage] = useState('Import files')
+  const [importing, setImporting] = useState(false)
 
   // New version dialog
   const [newVersionOpen, setNewVersionOpen] = useState(false)
@@ -202,6 +209,75 @@ export default function SkillRepoPage() {
     }
   }
 
+  async function handleImport() {
+    if (importMode === 'zip') {
+      const fileInput = document.getElementById('zipFileInput') as HTMLInputElement
+      if (!fileInput?.files?.[0]) return
+      setImporting(true)
+
+      try {
+        const formData = new FormData()
+        formData.append('zipFile', fileInput.files[0])
+        formData.append('message', importMessage)
+
+        const res = await fetch(`/api/skill-repos/${repoId}/import`, {
+          method: 'POST',
+          body: formData,
+        })
+
+        if (res.ok) {
+          setImportOpen(false)
+          setImportFiles('')
+          setImportMessage('Import files')
+          fetchRepo()
+        }
+      } catch (err) {
+        console.error('Failed to import:', err)
+      } finally {
+        setImporting(false)
+      }
+    } else {
+      if (!importFiles.trim()) return
+      setImporting(true)
+
+      try {
+        let files
+        try {
+          files = JSON.parse(importFiles)
+        } catch {
+          alert('Invalid JSON. Expected array of {path, content} objects.')
+          setImporting(false)
+          return
+        }
+
+        const res = await fetch(`/api/skill-repos/${repoId}/import`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            files,
+            message: importMessage,
+          }),
+        })
+
+        if (res.ok) {
+          setImportOpen(false)
+          setImportFiles('')
+          setImportMessage('Import files')
+          fetchRepo()
+        }
+      } catch (err) {
+        console.error('Failed to import:', err)
+      } finally {
+        setImporting(false)
+      }
+    }
+  }
+
+  function handleExportZip() {
+    if (!selectedVersion) return
+    window.open(`/api/skill-repos/${repoId}/export/${selectedVersion.id}?format=zip`, '_blank')
+  }
+
   async function handleRunLint() {
     try {
       const res = await fetch(`/api/skill-repos/${repoId}/lint`, {
@@ -251,6 +327,63 @@ export default function SkillRepoPage() {
     }
   }
 
+  const ratingColor = (rating: string) => {
+    switch (rating) {
+      case 'good': return 'bg-green-500/20 text-green-400 border-green-500/30'
+      case 'fair': return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+      case 'poor': return 'bg-red-500/20 text-red-400 border-red-500/30'
+      default: return 'bg-muted text-muted-foreground border-muted'
+    }
+  }
+
+  function computeScorecard(lintResults: LintResultItem[]) {
+    const categories = [
+      'spec-correctness', 'trigger-quality', 'scope-clarity',
+      'context-efficiency', 'instruction-quality', 'safety-control',
+      'validation-discipline', 'scriptability', 'eval-coverage',
+      'observed-execution-quality',
+    ]
+    return categories.map(category => {
+      const catIssues = lintResults.filter(i => i.category === category)
+      const errors = catIssues.filter(i => i.severity === 'error')
+      const warnings = catIssues.filter(i => i.severity === 'warning')
+      let rating = 'unknown'
+      if (category === 'observed-execution-quality' || category === 'eval-coverage') {
+        rating = 'unknown'
+      } else if (errors.length > 0) {
+        rating = 'poor'
+      } else if (warnings.length > 0) {
+        rating = 'fair'
+      } else {
+        rating = 'good'
+      }
+      return { category, rating, issues: catIssues }
+    })
+  }
+
+  function extractFrontmatter(version: VersionDetail) {
+    const skillMd = version.files.find(f => f.path === 'SKILL.md')
+    if (!skillMd) return null
+    const content = skillMd.content
+    if (!content.startsWith('---')) return null
+    const endIdx = content.indexOf('---', 3)
+    if (endIdx === -1) return null
+    const fmBlock = content.slice(3, endIdx).trim()
+    const fields: Record<string, string> = {}
+    for (const line of fmBlock.split('\n')) {
+      const colonIdx = line.indexOf(':')
+      if (colonIdx > 0) {
+        const key = line.slice(0, colonIdx).trim()
+        const value = line.slice(colonIdx + 1).trim()
+        fields[key] = value
+      }
+    }
+    return fields
+  }
+
+  const categoryLabel = (cat: string) =>
+    cat.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+
   return (
     <div className="flex min-h-screen">
       <Sidebar activePath="/" />
@@ -267,6 +400,77 @@ export default function SkillRepoPage() {
               <h1 className="text-2xl font-bold">{repo.displayName}</h1>
               <p className="text-sm text-muted-foreground font-mono">{repo.slug}</p>
             </div>
+            <Dialog open={importOpen} onOpenChange={setImportOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Upload className="mr-2 h-4 w-4" />
+                  Import
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[600px]">
+                <DialogHeader>
+                  <DialogTitle>Import Files</DialogTitle>
+                  <DialogDescription>
+                    Import skill files from a zip file or JSON file list.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="flex gap-2">
+                    <Button
+                      variant={importMode === 'zip' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setImportMode('zip')}
+                    >
+                      Zip Upload
+                    </Button>
+                    <Button
+                      variant={importMode === 'files' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setImportMode('files')}
+                    >
+                      JSON Files
+                    </Button>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="importMessage">Commit Message</Label>
+                    <Input
+                      id="importMessage"
+                      value={importMessage}
+                      onChange={(e) => setImportMessage(e.target.value)}
+                    />
+                  </div>
+                  {importMode === 'zip' ? (
+                    <div className="grid gap-2">
+                      <Label htmlFor="zipFileInput">Zip File</Label>
+                      <Input id="zipFileInput" type="file" accept=".zip" />
+                    </div>
+                  ) : (
+                    <div className="grid gap-2">
+                      <Label htmlFor="importFilesJson">Files JSON</Label>
+                      <Textarea
+                        id="importFilesJson"
+                        className="font-mono text-sm min-h-[200px]"
+                        placeholder='[{"path": "SKILL.md", "content": "# My Skill", "size": 10}]'
+                        value={importFiles}
+                        onChange={(e) => setImportFiles(e.target.value)}
+                      />
+                    </div>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setImportOpen(false)}>Cancel</Button>
+                  <Button onClick={handleImport} disabled={importing}>
+                    {importing ? 'Importing...' : 'Import'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+            {selectedVersion && (
+              <Button variant="outline" onClick={handleExportZip}>
+                <Download className="mr-2 h-4 w-4" />
+                Export Zip
+              </Button>
+            )}
             <Button variant="outline" onClick={handleRunLint}>
               <CheckCircle className="mr-2 h-4 w-4" />
               Run Lint
@@ -374,7 +578,9 @@ export default function SkillRepoPage() {
                 <Tabs value={activeTab} onValueChange={setActiveTab}>
                   <div className="flex items-center justify-between mb-4">
                     <TabsList>
+                      <TabsTrigger value="overview">Overview</TabsTrigger>
                       <TabsTrigger value="files">Files</TabsTrigger>
+                      <TabsTrigger value="scorecard">Scorecard</TabsTrigger>
                       <TabsTrigger value="lint">
                         Lint
                         {selectedVersion.lintResults.length > 0 && (
@@ -396,6 +602,156 @@ export default function SkillRepoPage() {
                       </Button>
                     </div>
                   </div>
+
+                  {/* Overview tab */}
+                  <TabsContent value="overview">
+                    <div className="space-y-4">
+                      <Card>
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-base">Version Info</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="flex items-center gap-2">
+                              <Hash className="h-4 w-4 text-muted-foreground" />
+                              <div>
+                                <p className="text-xs text-muted-foreground">Commit</p>
+                                <p className="font-mono text-sm">{selectedVersion.gitCommitSha.slice(0, 12)}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <GitBranch className="h-4 w-4 text-muted-foreground" />
+                              <div>
+                                <p className="text-xs text-muted-foreground">Branch</p>
+                                <p className="text-sm">{selectedVersion.branchName}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <FileText className="h-4 w-4 text-muted-foreground" />
+                              <div>
+                                <p className="text-xs text-muted-foreground">Files</p>
+                                <p className="text-sm">{selectedVersion.fileCount} files, {selectedVersion.lineCount} lines</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Type className="h-4 w-4 text-muted-foreground" />
+                              <div>
+                                <p className="text-xs text-muted-foreground">Tokens (est.)</p>
+                                <p className="text-sm">~{selectedVersion.tokenCount.toLocaleString()}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Clock className="h-4 w-4 text-muted-foreground" />
+                              <div>
+                                <p className="text-xs text-muted-foreground">Created</p>
+                                <p className="text-sm">{new Date(selectedVersion.createdAt).toLocaleString()}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                              <div>
+                                <p className="text-xs text-muted-foreground">Status</p>
+                                <p className="text-sm">{selectedVersion.isChampion ? 'Champion' : 'Version'}</p>
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {(() => {
+                        const fm = extractFrontmatter(selectedVersion)
+                        if (!fm) return null
+                        return (
+                          <Card>
+                            <CardHeader className="pb-3">
+                              <CardTitle className="text-base">Frontmatter</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="space-y-2">
+                                {Object.entries(fm).map(([key, value]) => (
+                                  <div key={key} className="flex items-start gap-2">
+                                    <span className="text-xs font-mono text-muted-foreground min-w-[140px]">{key}:</span>
+                                    <span className="text-sm break-all">{value}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )
+                      })()}
+
+                      {selectedVersion.lintResults.length > 0 && (
+                        <Card>
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <BarChart3 className="h-4 w-4" />
+                              Scorecard Summary
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="grid grid-cols-5 gap-2">
+                              {computeScorecard(selectedVersion.lintResults).map(({ category, rating }) => (
+                                <div
+                                  key={category}
+                                  className={`text-center p-2 rounded-lg border text-xs ${ratingColor(rating)}`}
+                                >
+                                  <p className="font-medium truncate" title={categoryLabel(category)}>
+                                    {categoryLabel(category)}
+                                  </p>
+                                  <p className="mt-1 font-bold capitalize">{rating}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      <Card>
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-base">Lint Summary</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-1">
+                              <AlertCircle className="h-4 w-4 text-red-400" />
+                              <span className="text-sm">{selectedVersion.lintResults.filter(r => r.severity === 'error').length} errors</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <AlertTriangle className="h-4 w-4 text-yellow-400" />
+                              <span className="text-sm">{selectedVersion.lintResults.filter(r => r.severity === 'warning').length} warnings</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Info className="h-4 w-4 text-blue-400" />
+                              <span className="text-sm">{selectedVersion.lintResults.filter(r => r.severity === 'info').length} info</span>
+                            </div>
+                            {selectedVersion.lintResults.length === 0 && (
+                              <div className="flex items-center gap-1">
+                                <CheckCircle className="h-4 w-4 text-green-400" />
+                                <span className="text-sm text-muted-foreground">No issues (run lint to check)</span>
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-base">File Tree</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-1">
+                            {selectedVersion.files.map((file) => (
+                              <div key={file.path} className="flex items-center gap-2 text-sm">
+                                <FileText className="h-3 w-3 text-muted-foreground" />
+                                <span className="font-mono text-xs">{file.path}</span>
+                                <span className="text-xs text-muted-foreground ml-auto">{file.size} B</span>
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </TabsContent>
 
                   {/* Files tab */}
                   <TabsContent value="files">
@@ -461,6 +817,59 @@ export default function SkillRepoPage() {
                                     </p>
                                   )}
                                 </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+
+                  {/* Scorecard tab */}
+                  <TabsContent value="scorecard">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <BarChart3 className="h-4 w-4" />
+                          Best-Practice Scorecard
+                        </CardTitle>
+                        <CardDescription>
+                          10-category quality assessment based on lint analysis
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        {selectedVersion.lintResults.length === 0 ? (
+                          <div className="text-center py-6 text-muted-foreground">
+                            <BarChart3 className="mx-auto h-8 w-8 mb-2" />
+                            <p>Run lint to generate scorecard</p>
+                            <Button variant="outline" size="sm" className="mt-2" onClick={handleRunLint}>
+                              Run Lint
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {computeScorecard(selectedVersion.lintResults).map(({ category, rating, issues }) => (
+                              <div key={category} className="border rounded-lg p-3">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-sm font-medium">{categoryLabel(category)}</span>
+                                  <Badge className={`text-xs ${ratingColor(rating)}`}>
+                                    {rating}
+                                  </Badge>
+                                </div>
+                                {issues.length > 0 ? (
+                                  <div className="space-y-1">
+                                    {issues.map((issue, idx) => (
+                                      <div key={idx} className="flex items-start gap-2 text-xs text-muted-foreground">
+                                        {severityIcon(issue.severity)}
+                                        <span>{issue.message}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p className="text-xs text-muted-foreground">
+                                    {rating === 'unknown' ? 'Requires eval runs to assess' : 'No issues found'}
+                                  </p>
+                                )}
                               </div>
                             ))}
                           </div>
