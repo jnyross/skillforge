@@ -213,7 +213,10 @@ async function readFilesFromDir(dirPath: string): Promise<SkillFile[]> {
       const fullPath = path.join(dir, entry.name)
       const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name
 
-      if (entry.isDirectory()) {
+      if (entry.isSymbolicLink()) {
+        // Skip symlinks to prevent reading arbitrary files (zip symlink attack)
+        continue
+      } else if (entry.isDirectory()) {
         await walk(fullPath, relativePath)
       } else {
         try {
