@@ -30,7 +30,7 @@ interface GeneratedResult {
 }
 
 interface SaveResult {
-  repo: { id: string; name: string; description: string }
+  repo: { id: string; slug: string; displayName: string; description: string }
   version: { id: string; commitSha: string }
   suites: Array<{ id: string; name: string; type: string; caseCount: number }>
 }
@@ -743,14 +743,14 @@ export default function WizardPage() {
           <div>
             <h2 className="text-xl font-bold mb-2">Skill Created Successfully!</h2>
             <p className="text-muted-foreground">
-              {saveResult.repo.name} has been created with an initial version and eval suites.
+              {saveResult.repo.displayName} has been created with an initial version and eval suites.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
             <div className="border border-border rounded-lg p-4 bg-card">
               <p className="text-muted-foreground mb-1">Repository</p>
-              <p className="font-medium">{saveResult.repo.name}</p>
+              <p className="font-medium">{saveResult.repo.displayName}</p>
             </div>
             <div className="border border-border rounded-lg p-4 bg-card">
               <p className="text-muted-foreground mb-1">Version</p>
@@ -767,7 +767,7 @@ export default function WizardPage() {
 
           <div className="flex items-center justify-center gap-3">
             <a
-              href={`/repos/${saveResult.repo.id}`}
+              href={`/skill-repos/${saveResult.repo.id}`}
               className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm hover:bg-primary/90"
             >
               View Skill Repo
