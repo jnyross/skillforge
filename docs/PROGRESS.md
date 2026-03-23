@@ -34,7 +34,7 @@ The PRD defines **5 phases** and **13 implementation slices** (Slice 0-12). The 
 
 | Requirement | Status | Notes |
 |---|---|---|
-| File upload/import | **Not done** | No import from local folder, zip, or git URL |
+| File upload/import | Done | Import from zip, JSON files, and local folder via `POST /api/skill-repos/:id/import` |
 | SKILL.md parser | Done | `skill-parser.ts` with gray-matter |
 | Frontmatter validation | Done | name, description, YAML parsing |
 | Spec compliance checks | Done | Hard validation layer |
@@ -56,10 +56,10 @@ The PRD defines **5 phases** and **13 implementation slices** (Slice 0-12). The 
 | Diff versions | Done | `diffVersions()` with per-file hunks |
 | Restore version | Done | `restoreVersion()` creates new commit |
 | Branch support | Done | `createBranch()`, `listBranches()` |
-| Tests: commit creation | **Not done** | No git-storage unit/integration tests |
-| Tests: file tree round-trip | **Not done** | |
-| Tests: diff correctness | **Not done** | |
-| Tests: restore correctness | **Not done** | |
+| Tests: commit creation | Done | Integration tests in `git-storage.test.ts` |
+| Tests: file tree round-trip | Done | Tests writeFiles/readFiles round-trip |
+| Tests: diff correctness | Done | Tests diffVersions with add/modify/remove |
+| Tests: restore correctness | Done | Tests restoreVersion restores old content |
 | Tests: concurrent save protection | **Not done** | No concurrency handling |
 
 ### Slice 3 — Repository UI
@@ -79,7 +79,7 @@ The PRD defines **5 phases** and **13 implementation slices** (Slice 0-12). The 
 
 | Requirement | Status | Notes |
 |---|---|---|
-| Skill import/export (zip, folder, git URL) | **Not done** | Export endpoint exists but no import from zip/folder/git URL |
+| Skill import/export (zip, folder, git URL) | Mostly Done | Import (zip, folder, JSON) + export (JSON, zip) done; git URL import not yet |
 | Manual run harness against real Claude Code CLI | **Not done** | |
 | Smoke eval support | **Not done** | |
 | Semantic labels/tags on versions | **Not done** | Schema lacks tags |
@@ -228,8 +228,8 @@ The PRD defines **5 phases** and **13 implementation slices** (Slice 0-12). The 
 | `GET /api/skill-repos/:id` | Yes | |
 | `PATCH /api/skill-repos/:id` | Yes | (extra, not in PRD) |
 | `DELETE /api/skill-repos/:id` | Yes | (extra, not in PRD) |
-| `POST /api/skill-repos/:id/import` | No | |
-| `POST /api/skill-repos/:id/export` | Partial | Export by version exists |
+| `POST /api/skill-repos/:id/import` | Yes | Supports zip, JSON files, folder path |
+| `POST /api/skill-repos/:id/export` | Yes | Export by version as JSON or zip (`?format=zip`) |
 | `POST /api/skill-repos/:id/versions` | Yes | |
 | `GET /api/skill-repos/:id/versions/:versionId` | Yes | |
 | `GET /api/skill-repos/:id/diff` | Yes | |
@@ -266,7 +266,7 @@ The PRD defines **5 phases** and **13 implementation slices** (Slice 0-12). The 
 |---|---|---|
 | Main navigation sidebar | Yes | With disabled placeholders for future sections |
 | Repository list screen | Yes | |
-| Version detail screen | Partial | Files, lint, diff tabs; missing scorecard display, linked evals/reviews/optimizer |
+| Version detail screen | Mostly Done | Overview, files, scorecard, lint, diff tabs; frontmatter display; import/export buttons; missing linked evals/reviews/optimizer |
 | Eval run screen | No | |
 | Review arena | No | |
 | Optimizer screen | No | |
@@ -279,20 +279,20 @@ The PRD defines **5 phases** and **13 implementation slices** (Slice 0-12). The 
 
 | Phase | Slices | Status | Completion |
 |---|---|---|---|
-| Phase 1 — Real MVP | 0-3 | Partially done | ~55% |
+| Phase 1 — Real MVP | 0-3 | Mostly done | ~75% |
 | Phase 2 — Eval Lab | 4-7 | Not started | 0% |
 | Phase 3 — Human Review + Judge | 8-9 | Not started | 0% |
 | Phase 4 — Optimizer | 10 | Not started | 0% |
 | Phase 5 — Wizard | 11 | Not started | 0% |
 | Hardening | 12 | Not started | 0% |
-| **Overall** | **0-12** | | **~10-12%** |
+| **Overall** | **0-12** | | **~15-18%** |
 
 Key gaps even within Phase 1:
 - No CI pipeline
-- No import from zip/folder/git URL
+- No import from git URL (zip/folder import done)
 - No Postgres (using SQLite)
 - No Redis/BullMQ worker infrastructure
 - No E2E/Playwright tests
-- No git-storage integration tests
+- Git-storage integration tests added
 - No Claude CLI execution harness
 - No smoke eval support

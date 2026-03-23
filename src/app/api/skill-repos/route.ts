@@ -22,7 +22,29 @@ export async function GET() {
     },
   })
 
-  const reposDto = repos.map(({ gitRepoPath: _g, ...rest }) => rest)
+  // Fetch lint results only for the latest version of each repo
+  const latestVersionIds = repos
+    .map(r => r.versions[0]?.id)
+    .filter((id): id is string => !!id)
+
+  const lintResults = latestVersionIds.length > 0
+    ? await prisma.lintResult.findMany({
+        where: { skillVersionId: { in: latestVersionIds } },
+        select: { skillVersionId: true, severity: true },
+      })
+    : []
+
+  const lintByVersion = new Map<string, Array<{ severity: string }>>()
+  for (const lr of lintResults) {
+    const existing = lintByVersion.get(lr.skillVersionId) || []
+    existing.push({ severity: lr.severity })
+    lintByVersion.set(lr.skillVersionId, existing)
+  }
+
+  const reposDto = repos.map(({ gitRepoPath: _g, ...rest }) => ({
+    ...rest,
+    lintResults: lintByVersion.get(rest.versions[0]?.id) || [],
+  }))
   return NextResponse.json(reposDto)
 }
 
