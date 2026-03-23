@@ -44,12 +44,15 @@ export async function POST(
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const { files, message, branchName, isChampion, notes } = body as {
+  const { files, message, branchName, isChampion, notes, author, tags, expectedParentVersionId } = body as {
     files: SkillFile[]
     message: string
     branchName?: string
     isChampion?: boolean
     notes?: string
+    author?: string
+    tags?: string[]
+    expectedParentVersionId?: string | null
   }
 
   if (!Array.isArray(files) || files.length === 0) {
@@ -67,6 +70,22 @@ export async function POST(
     where: { skillRepoId: params.id, branchName: branch },
     orderBy: { createdAt: 'desc' },
   })
+
+  // Optimistic concurrency check: if the caller provides expectedParentVersionId,
+  // verify it matches the actual latest version to prevent lost updates.
+  if (expectedParentVersionId !== undefined) {
+    const actualParentId = parentVersion?.id || null
+    if (expectedParentVersionId !== actualParentId) {
+      return NextResponse.json(
+        {
+          error: 'Concurrent modification detected. Another version was saved since you last loaded.',
+          expectedParentVersionId,
+          actualParentVersionId: actualParentId,
+        },
+        { status: 409 }
+      )
+    }
+  }
 
   // Capture current HEAD for compensation on failure
   const git = (await import('@/lib/services/git-storage')).getGit(repo.gitRepoPath)
@@ -96,6 +115,7 @@ export async function POST(
         gitCommitSha: commitSha,
         parentVersionId: parentVersion?.id || null,
         commitMessage: message,
+        createdBy: author || 'user',
         tokenCount: estimateTokenCount(totalContent),
         lineCount: countLines(totalContent),
         fileCount: files.length,
@@ -103,6 +123,16 @@ export async function POST(
         notes: notes || '',
       },
     })
+
+    // Create tags if provided
+    if (tags && tags.length > 0) {
+      await prisma.versionTag.createMany({
+        data: tags.map(name => ({
+          skillVersionId: version.id,
+          name,
+        })),
+      })
+    }
 
     // If marked as champion, update repo
     if (isChampion) {
@@ -145,7 +175,13 @@ export async function POST(
       }
     }
 
-    return NextResponse.json(version, { status: 201 })
+    // Fetch complete version with tags
+    const completeVersion = await prisma.skillVersion.findUnique({
+      where: { id: version.id },
+      include: { tags: true },
+    })
+
+    return NextResponse.json(completeVersion, { status: 201 })
   } catch (err) {
     // Compensate: reset git branch to previous HEAD
     if (previousHead) {

@@ -6,7 +6,7 @@ import Link from 'next/link'
 import {
   ArrowLeft, GitCommit, FileText, Clock, Plus, RotateCcw,
   AlertTriangle, AlertCircle, Info, CheckCircle, GitBranch,
-  Diff, Upload, Download, Hash, Type, BarChart3
+  Diff, Upload, Download, Hash, Type, BarChart3, Tag, X, Globe, User
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -19,6 +19,12 @@ import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Sidebar } from '@/components/sidebar'
+
+interface VersionTagItem {
+  id: string
+  name: string
+  color: string
+}
 
 interface SkillVersion {
   id: string
@@ -33,6 +39,7 @@ interface SkillVersion {
   fileCount: number
   isChampion: boolean
   notes: string
+  tags?: VersionTagItem[]
 }
 
 interface LintResultItem {
@@ -55,6 +62,7 @@ interface SkillFileItem {
 interface VersionDetail extends SkillVersion {
   files: SkillFileItem[]
   lintResults: LintResultItem[]
+  tags: VersionTagItem[]
 }
 
 interface DiffFile {
@@ -84,10 +92,17 @@ export default function SkillRepoPage() {
 
   // Import dialog
   const [importOpen, setImportOpen] = useState(false)
-  const [importMode, setImportMode] = useState<'files' | 'zip'>('files')
+  const [importMode, setImportMode] = useState<'files' | 'zip' | 'git'>('files')
   const [importFiles, setImportFiles] = useState('')
   const [importMessage, setImportMessage] = useState('Import files')
   const [importing, setImporting] = useState(false)
+  const [gitUrl, setGitUrl] = useState('')
+  const [gitBranch, setGitBranch] = useState('')
+  const [gitSubfolder, setGitSubfolder] = useState('')
+
+  // Tag management
+  const [newTagName, setNewTagName] = useState('')
+  const [addingTag, setAddingTag] = useState(false)
 
   // New version dialog
   const [newVersionOpen, setNewVersionOpen] = useState(false)
@@ -209,7 +224,82 @@ export default function SkillRepoPage() {
     }
   }
 
+  async function handleAddTag() {
+    if (!selectedVersion || !newTagName.trim()) return
+    setAddingTag(true)
+    try {
+      const res = await fetch(`/api/skill-repos/${repoId}/versions/${selectedVersion.id}/tags`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newTagName.trim() }),
+      })
+      if (res.ok) {
+        const tag = await res.json()
+        setSelectedVersion({
+          ...selectedVersion,
+          tags: [...(selectedVersion.tags || []), tag],
+        })
+        setNewTagName('')
+      }
+    } catch (err) {
+      console.error('Failed to add tag:', err)
+    } finally {
+      setAddingTag(false)
+    }
+  }
+
+  async function handleRemoveTag(tagName: string) {
+    if (!selectedVersion) return
+    try {
+      const res = await fetch(
+        `/api/skill-repos/${repoId}/versions/${selectedVersion.id}/tags?name=${encodeURIComponent(tagName)}`,
+        { method: 'DELETE' }
+      )
+      if (res.ok) {
+        setSelectedVersion({
+          ...selectedVersion,
+          tags: (selectedVersion.tags || []).filter(t => t.name !== tagName),
+        })
+      }
+    } catch (err) {
+      console.error('Failed to remove tag:', err)
+    }
+  }
+
   async function handleImport() {
+    if (importMode === 'git') {
+      if (!gitUrl.trim()) return
+      setImporting(true)
+      try {
+        const res = await fetch(`/api/skill-repos/${repoId}/import-git`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: gitUrl.trim(),
+            message: importMessage,
+            branch: gitBranch || undefined,
+            subfolder: gitSubfolder || undefined,
+          }),
+        })
+        if (res.ok) {
+          setImportOpen(false)
+          setGitUrl('')
+          setGitBranch('')
+          setGitSubfolder('')
+          setImportMessage('Import files')
+          fetchRepo()
+        } else {
+          const data = await res.json()
+          alert(data.error || 'Import failed')
+        }
+      } catch (err) {
+        console.error('Failed to import from git:', err)
+      } finally {
+        setImporting(false)
+      }
+      return
+    }
+
     if (importMode === 'zip') {
       const fileInput = document.getElementById('zipFileInput') as HTMLInputElement
       if (!fileInput?.files?.[0]) return
@@ -430,6 +520,14 @@ export default function SkillRepoPage() {
                     >
                       JSON Files
                     </Button>
+                    <Button
+                      variant={importMode === 'git' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setImportMode('git')}
+                    >
+                      <Globe className="mr-1 h-3 w-3" />
+                      Git URL
+                    </Button>
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="importMessage">Commit Message</Label>
@@ -443,6 +541,38 @@ export default function SkillRepoPage() {
                     <div className="grid gap-2">
                       <Label htmlFor="zipFileInput">Zip File</Label>
                       <Input id="zipFileInput" type="file" accept=".zip" />
+                    </div>
+                  ) : importMode === 'git' ? (
+                    <div className="grid gap-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="gitUrl">Git URL</Label>
+                        <Input
+                          id="gitUrl"
+                          placeholder="https://github.com/user/repo.git"
+                          value={gitUrl}
+                          onChange={(e) => setGitUrl(e.target.value)}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                          <Label htmlFor="gitBranch">Branch (optional)</Label>
+                          <Input
+                            id="gitBranch"
+                            placeholder="main"
+                            value={gitBranch}
+                            onChange={(e) => setGitBranch(e.target.value)}
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="gitSubfolder">Subfolder (optional)</Label>
+                          <Input
+                            id="gitSubfolder"
+                            placeholder="path/to/skill"
+                            value={gitSubfolder}
+                            onChange={(e) => setGitSubfolder(e.target.value)}
+                          />
+                        </div>
+                      </div>
                     </div>
                   ) : (
                     <div className="grid gap-2">
@@ -563,6 +693,16 @@ export default function SkillRepoPage() {
                           <span>{version.lineCount} lines</span>
                           <span>{new Date(version.createdAt).toLocaleDateString()}</span>
                         </div>
+                        {version.tags && version.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {version.tags.map((tag) => (
+                              <Badge key={tag.id} variant="outline" className="text-xs py-0 px-1">
+                                <Tag className="h-2 w-2 mr-0.5" />
+                                {tag.name}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
                       </button>
                     ))}
                   </ScrollArea>
@@ -648,12 +788,64 @@ export default function SkillRepoPage() {
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
+                              <User className="h-4 w-4 text-muted-foreground" />
+                              <div>
+                                <p className="text-xs text-muted-foreground">Author</p>
+                                <p className="text-sm">{selectedVersion.createdBy}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
                               <BarChart3 className="h-4 w-4 text-muted-foreground" />
                               <div>
                                 <p className="text-xs text-muted-foreground">Status</p>
                                 <p className="text-sm">{selectedVersion.isChampion ? 'Champion' : 'Version'}</p>
                               </div>
                             </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* Tags section */}
+                      <Card>
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <Tag className="h-4 w-4" />
+                            Tags
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="flex flex-wrap gap-2 mb-3">
+                            {(selectedVersion.tags || []).map((tag) => (
+                              <Badge key={tag.id} variant="outline" className="flex items-center gap-1">
+                                {tag.name}
+                                <button
+                                  onClick={() => handleRemoveTag(tag.name)}
+                                  className="ml-1 hover:text-destructive"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </Badge>
+                            ))}
+                            {(!selectedVersion.tags || selectedVersion.tags.length === 0) && (
+                              <span className="text-xs text-muted-foreground">No tags yet</span>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            <Input
+                              placeholder="Add tag..."
+                              value={newTagName}
+                              onChange={(e) => setNewTagName(e.target.value)}
+                              onKeyDown={(e) => e.key === 'Enter' && handleAddTag()}
+                              className="h-8 text-sm"
+                            />
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={handleAddTag}
+                              disabled={addingTag || !newTagName.trim()}
+                            >
+                              <Plus className="h-3 w-3" />
+                            </Button>
                           </div>
                         </CardContent>
                       </Card>
