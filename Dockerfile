@@ -31,7 +31,7 @@ COPY --from=base /app/node_modules ./node_modules
 COPY --from=base /app/package.json ./package.json
 COPY --from=base /app/prisma ./prisma
 COPY --from=base /app/public ./public
-COPY --from=base /app/next.config.ts ./next.config.ts
+COPY --from=base /app/next.config.js ./next.config.js
 
 # Create data directory for SQLite and git repos
 RUN mkdir -p /data/skill-repos
@@ -43,7 +43,7 @@ RUN git config --global user.email "skillforge@localhost" && \
 
 ENV NODE_ENV=production
 ENV DATABASE_URL=file:/data/skillforge.db
-ENV DATA_DIR=/data/skill-repos
+ENV SKILL_REPOS_PATH=/data/skill-repos
 ENV PORT=3000
 
 # Run migrations and start

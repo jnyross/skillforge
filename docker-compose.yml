@@ -10,7 +10,7 @@ services:
     environment:
       - NODE_ENV=production
       - DATABASE_URL=file:/data/skillforge.db
-      - DATA_DIR=/data/skill-repos
+      - SKILL_REPOS_PATH=/data/skill-repos
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - DEFAULT_EXECUTOR=${DEFAULT_EXECUTOR:-claude-cli}
       - DEFAULT_MODEL=${DEFAULT_MODEL:-claude-sonnet-4-20250514}
