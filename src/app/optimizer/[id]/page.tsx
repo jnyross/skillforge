@@ -95,7 +95,7 @@ export default function OptimizerRunDetailPage() {
 
   // Auto-refresh while running
   useEffect(() => {
-    if (!run || run.status !== 'running') return
+    if (!run || !['running', 'queued'].includes(run.status)) return
     const interval = setInterval(fetchRun, 3000)
     return () => clearInterval(interval)
   }, [run, fetchRun])
