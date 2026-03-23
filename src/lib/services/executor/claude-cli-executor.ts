@@ -100,7 +100,7 @@ export class ClaudeCliExecutor implements Executor {
     if (config?.effort) {
       args.push('--effort', config.effort)
     }
-    if (config?.maxTurns) {
+    if (config?.maxTurns != null) {
       args.push('--max-turns', String(config.maxTurns))
     }
     if (config?.permissionMode) {
@@ -109,7 +109,7 @@ export class ClaudeCliExecutor implements Executor {
     if (config?.allowedTools && config.allowedTools.length > 0) {
       args.push('--allowedTools', ...config.allowedTools)
     }
-    if (config?.maxBudgetUsd) {
+    if (config?.maxBudgetUsd != null) {
       args.push('--max-budget-usd', String(config.maxBudgetUsd))
     }
 

@@ -23,6 +23,14 @@ export async function POST(
     )
   }
 
+  const session = await prisma.reviewSession.findUnique({ where: { id: params.id } })
+  if (!session) {
+    return NextResponse.json({ error: 'Session not found' }, { status: 404 })
+  }
+  if (session.status !== 'active') {
+    return NextResponse.json({ error: 'Session is not active' }, { status: 400 })
+  }
+
   const comparison = await prisma.pairwiseComparison.findUnique({
     where: { id: comparisonId },
   })
