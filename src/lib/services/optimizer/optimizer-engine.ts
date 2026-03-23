@@ -133,13 +133,20 @@ export async function handleOptimizerJob(
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err)
 
-    await prisma.optimizerRun.update({
+    // Only mark as failed if not already stopped
+    const currentRun = await prisma.optimizerRun.findUnique({
       where: { id: optimizerRunId },
-      data: { status: 'failed', completedAt: new Date() },
+      select: { status: true },
     })
+    if (currentRun?.status !== 'stopped') {
+      await prisma.optimizerRun.update({
+        where: { id: optimizerRunId },
+        data: { status: 'failed', completedAt: new Date() },
+      })
+    }
 
     await logAuditEvent({
-      action: 'optimizer_run.failed',
+      action: currentRun?.status === 'stopped' ? 'optimizer_run.stopped' : 'optimizer_run.failed',
       entityType: 'optimizer_run',
       entityId: optimizerRunId,
       details: { error: errorMsg },
