@@ -378,7 +378,7 @@ async function generateCandidate(
   } catch (err) {
     // Create candidate record with crash status
     const errorMsg = err instanceof Error ? err.message : String(err)
-    const candidate = await prisma.optimizerCandidate.create({
+    await prisma.optimizerCandidate.create({
       data: {
         optimizerRunId,
         parentVersionId,
@@ -388,7 +388,7 @@ async function generateCandidate(
         error: errorMsg,
       },
     })
-    return { id: candidate.id, candidateVersionId: null }
+    return null
   }
 }
 
@@ -486,6 +486,7 @@ function aggregateMetrics(metricsArray: Record<string, unknown>[]): EvalMetrics 
     totalPass += passCount
     totalFail += failCount
     totalDuration += ((m.duration as { mean?: number })?.mean || 0)
+    totalTokens += ((m.tokens as { mean?: number })?.mean || 0) * (passCount + failCount)
     totalCost += ((m.cost as { total?: number })?.total || 0)
     count++
   }
