@@ -72,11 +72,16 @@ export async function handleOptimizerJob(
     return { status: 'skipped', reason: `Run is already in '${run.status}' status` }
   }
 
-  // Mark as running
-  await prisma.optimizerRun.update({
-    where: { id: optimizerRunId },
+  // Only mark as running if not already stopped — use conditional update
+  // to avoid TOCTOU race with the stop endpoint
+  const startResult = await prisma.optimizerRun.updateMany({
+    where: { id: optimizerRunId, status: 'queued' },
     data: { status: 'running', startedAt: new Date() },
   })
+  if (startResult.count === 0 && run.status === 'queued') {
+    // Status changed (likely stopped) since we read it
+    return { status: 'stopped', reason: 'Run status changed before optimizer could start' }
+  }
 
   await logAuditEvent({
     action: 'optimizer_run.started',
