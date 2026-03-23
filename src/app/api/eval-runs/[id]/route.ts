@@ -45,11 +45,12 @@ export async function PATCH(
     )
   }
 
+  const run = await prisma.evalRun.findUnique({ where: { id: params.id } })
+  if (!run) {
+    return NextResponse.json({ error: 'Run not found' }, { status: 404 })
+  }
+
   if (status === 'cancelled') {
-    const run = await prisma.evalRun.findUnique({ where: { id: params.id } })
-    if (!run) {
-      return NextResponse.json({ error: 'Run not found' }, { status: 404 })
-    }
     if (run.status !== 'queued' && run.status !== 'running') {
       return NextResponse.json(
         { error: 'Can only cancel queued or running runs' },

@@ -200,6 +200,7 @@ model EvalRun {
   suite             EvalSuite    @relation(fields: [suiteId], references: [id])
   caseRuns          EvalCaseRun[]
   benchmarkSnapshots BenchmarkSnapshot[]
+  traces            Trace[]
 
   @@index([skillRepoId])
   @@index([skillVersionId])
@@ -536,6 +537,7 @@ model Trace {
   createdAt       DateTime   @default(now())
   completedAt     DateTime?
 
+  evalRun         EvalRun?       @relation(fields: [evalRunId], references: [id], onDelete: SetNull)
   skillVersion    SkillVersion? @relation(fields: [skillVersionId], references: [id])
   toolEvents      ToolEvent[]
   artifacts       RunArtifact[]
