@@ -409,7 +409,7 @@ ${input.corrections && input.corrections.length > 0 ? `## Gotchas\n${input.corre
   if (input.mode === 'scratch') {
     warnings.push('Generated without real artifacts — ground with examples before serious use.')
   }
-  if (input.artifacts.length === 0 && input.conversations?.length === 0) {
+  if (input.artifacts.length === 0 && (!input.conversations || input.conversations.length === 0)) {
     warnings.push('No artifacts or conversations provided. The generated skill may be generic.')
   }
 
