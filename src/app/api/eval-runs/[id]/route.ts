@@ -8,9 +8,10 @@ export async function GET(
   const run = await prisma.evalRun.findUnique({
     where: { id: params.id },
     include: {
+      skillRepo: { select: { id: true, displayName: true, slug: true } },
       skillVersion: true,
       baselineVersion: true,
-      suite: { include: { cases: true } },
+      suite: { select: { id: true, name: true, type: true } },
       caseRuns: {
         include: {
           evalCase: true,

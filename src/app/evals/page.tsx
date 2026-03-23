@@ -15,16 +15,55 @@ interface EvalSuite {
   _count: { cases: number; evalRuns: number }
 }
 
+interface SkillRepo {
+  id: string
+  displayName: string
+  slug: string
+}
+
 export default function EvalsPage() {
   const [suites, setSuites] = useState<EvalSuite[]>([])
+  const [repos, setRepos] = useState<SkillRepo[]>([])
   const [loading, setLoading] = useState(true)
+  const [showCreate, setShowCreate] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [error, setError] = useState('')
+  const [form, setForm] = useState({ name: '', type: 'output', skillRepoId: '', description: '' })
 
-  useEffect(() => {
+  const loadSuites = () => {
     fetch('/api/eval-suites')
       .then(r => r.json())
       .then(data => { setSuites(data); setLoading(false) })
       .catch(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    loadSuites()
+    fetch('/api/skill-repos')
+      .then(r => r.json())
+      .then(setRepos)
+      .catch(() => {})
   }, [])
+
+  const createSuite = async () => {
+    if (!form.name || !form.skillRepoId) return
+    setCreating(true)
+    setError('')
+    const res = await fetch('/api/eval-suites', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form),
+    })
+    if (res.ok) {
+      setForm({ name: '', type: 'output', skillRepoId: '', description: '' })
+      setShowCreate(false)
+      loadSuites()
+    } else {
+      const data = await res.json()
+      setError(data.error || 'Failed to create suite')
+    }
+    setCreating(false)
+  }
 
   const typeColors: Record<string, string> = {
     trigger: 'bg-blue-500/10 text-blue-400',
@@ -47,11 +86,87 @@ export default function EvalsPage() {
             Manage evaluation suites, cases, and runs
           </p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm hover:bg-primary/90">
+        <button
+          onClick={() => setShowCreate(!showCreate)}
+          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm hover:bg-primary/90"
+        >
           <Plus className="h-4 w-4" />
           New Suite
         </button>
       </div>
+
+      {/* Create Suite Form */}
+      {showCreate && (
+        <div className="border border-border rounded-lg p-4 space-y-3 bg-card">
+          <h3 className="font-medium">Create Eval Suite</h3>
+          {error && <p className="text-sm text-red-400">{error}</p>}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium mb-1 block">Name</label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="e.g., Trigger Accuracy Suite"
+                className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Skill Repo</label>
+              <select
+                value={form.skillRepoId}
+                onChange={e => setForm(f => ({ ...f, skillRepoId: e.target.value }))}
+                className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm"
+              >
+                <option value="">Select repo...</option>
+                {repos.map(r => (
+                  <option key={r.id} value={r.id}>{r.displayName}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium mb-1 block">Type</label>
+              <select
+                value={form.type}
+                onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
+                className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm"
+              >
+                <option value="trigger">Trigger</option>
+                <option value="output">Output</option>
+                <option value="workflow">Workflow</option>
+                <option value="regression">Regression</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Description</label>
+              <input
+                type="text"
+                value={form.description}
+                onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                placeholder="Optional description..."
+                className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={createSuite}
+              disabled={!form.name || !form.skillRepoId || creating}
+              className="px-3 py-1.5 bg-primary text-primary-foreground rounded-md text-sm hover:bg-primary/90 disabled:opacity-50"
+            >
+              {creating ? 'Creating...' : 'Create Suite'}
+            </button>
+            <button
+              onClick={() => { setShowCreate(false); setError('') }}
+              className="px-3 py-1.5 border border-border rounded-md text-sm hover:bg-accent"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="text-muted-foreground">Loading...</div>

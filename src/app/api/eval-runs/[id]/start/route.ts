@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { startEvalRun } from '@/lib/services/eval'
+import { ensureEvalHandlersRegistered } from '@/lib/services/eval/init'
+
+// Register eval handlers on first request
+ensureEvalHandlersRegistered()
 
 export async function POST(
   _request: NextRequest,
