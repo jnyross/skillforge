@@ -114,7 +114,9 @@ export async function handleOptimizerJob(
       where: { id: optimizerRunId },
       select: { status: true },
     })
-    if (finalRun?.status !== 'stopped') {
+    const finalStatus = finalRun?.status === 'stopped' ? 'stopped' : 'completed'
+
+    if (finalStatus !== 'stopped') {
       await prisma.optimizerRun.update({
         where: { id: optimizerRunId },
         data: { status: 'completed', completedAt: new Date() },
@@ -122,12 +124,12 @@ export async function handleOptimizerJob(
     }
 
     await logAuditEvent({
-      action: 'optimizer_run.completed',
+      action: `optimizer_run.${finalStatus}`,
       entityType: 'optimizer_run',
       entityId: optimizerRunId,
     })
 
-    return { status: 'completed' }
+    return { status: finalStatus }
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err)
 
