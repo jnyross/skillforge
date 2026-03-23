@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   FolderGit2, FlaskConical, Users, Scale, Zap, Wand2,
-  Settings, Activity, LayoutDashboard,
+  Settings, Activity, LayoutDashboard, Shield,
 } from 'lucide-react'
 
 const navItems = [
@@ -15,6 +15,7 @@ const navItems = [
   { href: '/judges', label: 'Judges', icon: Scale },
   { href: '/optimizer', label: 'Optimizer', icon: Zap },
   { href: '/wizard', label: 'Wizard', icon: Wand2 },
+  { href: '/acceptance', label: 'Acceptance', icon: Shield },
   { href: '/settings', label: 'Settings', icon: Settings },
 ]
 
@@ -54,7 +55,7 @@ export function NavSidebar() {
       </nav>
 
       <div className="p-4 border-t border-border text-xs text-muted-foreground">
-        SkillForge v0.2.0
+        SkillForge v1.0.0
       </div>
     </aside>
   )

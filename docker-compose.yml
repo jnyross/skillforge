@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  skillforge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:/data/skillforge.db
+      - DATA_DIR=/data/skill-repos
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - DEFAULT_EXECUTOR=${DEFAULT_EXECUTOR:-claude-cli}
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-claude-sonnet-4-20250514}
+    volumes:
+      - skillforge-data:/data
+      - claude-config:/root/.claude
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/executor-health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  skillforge-data:
+    driver: local
+  claude-config:
+    driver: local
