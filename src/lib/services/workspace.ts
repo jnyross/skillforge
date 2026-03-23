@@ -48,7 +48,7 @@ export async function createWorkspace(options: {
       validatePath(fixture.path)
       const fixturePath = path.resolve(workspacePath, fixture.path)
       // Ensure it stays within workspace
-      if (!fixturePath.startsWith(workspacePath)) {
+      if (!fixturePath.startsWith(workspacePath + path.sep) && fixturePath !== workspacePath) {
         throw new Error(`Path traversal detected in fixture: ${fixture.path}`)
       }
       await fs.mkdir(path.dirname(fixturePath), { recursive: true })
