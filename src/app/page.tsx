@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Plus, GitBranch, FileText, Clock, AlertCircle, AlertTriangle, CheckCircle } from 'lucide-react'
+import { Plus, GitBranch, FileText, Clock, AlertCircle, AlertTriangle, CheckCircle, Zap, Star, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -31,6 +31,8 @@ interface SkillRepo {
   lintResults: Array<{
     severity: string
   }>
+  failingSuiteCount: number
+  activeOptimizerCount: number
   _count: {
     versions: number
   }
@@ -241,8 +243,23 @@ export default function HomePage() {
                                 Clean
                               </Badge>
                             )}
+                            {repo.failingSuiteCount > 0 && (
+                              <Badge variant="destructive" className="flex items-center gap-1">
+                                <XCircle className="h-3 w-3" />
+                                {repo.failingSuiteCount} failing suite{repo.failingSuiteCount !== 1 ? 's' : ''}
+                              </Badge>
+                            )}
+                            {repo.activeOptimizerCount > 0 && (
+                              <Badge variant="outline" className="flex items-center gap-1 border-purple-500/50 text-purple-400">
+                                <Zap className="h-3 w-3" />
+                                {repo.activeOptimizerCount} optimizer{repo.activeOptimizerCount !== 1 ? 's' : ''}
+                              </Badge>
+                            )}
                             {repo.currentChampionVersionId && (
-                              <Badge variant="success">Champion</Badge>
+                              <Badge variant="outline" className="flex items-center gap-1 border-yellow-500/50 text-yellow-400">
+                                <Star className="h-3 w-3" />
+                                Champion
+                              </Badge>
                             )}
                             <Badge variant="outline">
                               {repo._count.versions} version{repo._count.versions !== 1 ? 's' : ''}
