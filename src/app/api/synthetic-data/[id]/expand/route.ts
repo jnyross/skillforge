@@ -37,7 +37,7 @@ export async function POST(
 
   await prisma.syntheticDataConfig.update({
     where: { id: params.id },
-    data: { status: 'expanded' },
+    data: { status: 'review' },
   })
 
   return NextResponse.json({ expanded: expanded.length })

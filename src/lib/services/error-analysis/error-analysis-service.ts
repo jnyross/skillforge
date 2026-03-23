@@ -10,11 +10,12 @@
 import { prisma } from '@/lib/prisma'
 
 export interface SaturationMetrics {
-  totalTracesReviewed: number
-  totalCategories: number
-  tracesPerNewCategory: number[]  // rolling window of traces between new categories
-  isApproachingSaturation: boolean
-  saturationConfidence: number // 0-1
+  tracesReviewed: number
+  totalTraces: number
+  categoriesDiscovered: number
+  newCategoriesInLast10: number
+  saturationReached: boolean
+  reviewProgress: number // 0-1
 }
 
 /**
@@ -78,56 +79,38 @@ export async function sampleTraces(
  * Saturation is approached when the rate of discovering new categories decreases.
  */
 export async function computeSaturation(sessionId: string): Promise<SaturationMetrics> {
-  const traces = await prisma.errorAnalysisTrace.findMany({
-    where: { analysisSessionId: sessionId, reviewedAt: { not: null } },
+  const allTraces = await prisma.errorAnalysisTrace.findMany({
+    where: { analysisSessionId: sessionId },
     orderBy: { sequence: 'asc' },
   })
+
+  const reviewedTraces = allTraces.filter(t => t.reviewedAt !== null)
 
   const categories = await prisma.failureCategory.findMany({
     where: { analysisSessionId: sessionId },
     orderBy: { createdAt: 'asc' },
   })
 
-  const totalTracesReviewed = traces.length
-  const totalCategories = categories.length
+  const tracesReviewed = reviewedTraces.length
+  const totalTraces = allTraces.length
+  const categoriesDiscovered = categories.length
 
-  // Calculate traces between new category discoveries
-  const tracesPerNewCategory: number[] = []
-  let lastNewCategoryTrace = 0
+  // Count new categories discovered in last 10 reviewed traces
+  const last10 = reviewedTraces.slice(-10)
+  const newCategoriesInLast10 = last10.filter(t => t.isNewFailureMode).length
 
-  for (const trace of traces) {
-    if (trace.isNewFailureMode) {
-      tracesPerNewCategory.push(trace.sequence - lastNewCategoryTrace)
-      lastNewCategoryTrace = trace.sequence
-    }
-  }
+  // Saturation: no new categories in last 10 reviewed traces and we've reviewed enough
+  const saturationReached = tracesReviewed >= 10 && newCategoriesInLast10 === 0 && categoriesDiscovered > 0
 
-  // Saturation confidence: based on the trend of traces between new categories
-  // If the gap between new categories is growing, we're approaching saturation
-  let saturationConfidence = 0
-  if (tracesPerNewCategory.length >= 3) {
-    const recent = tracesPerNewCategory.slice(-3)
-    const early = tracesPerNewCategory.slice(0, 3)
-    const recentAvg = recent.reduce((a, b) => a + b, 0) / recent.length
-    const earlyAvg = early.reduce((a, b) => a + b, 0) / early.length
-    if (earlyAvg > 0) {
-      saturationConfidence = Math.min(1, recentAvg / (earlyAvg * 3))
-    }
-  }
-
-  // Also consider: if we've reviewed 5+ traces without a new category, confidence increases
-  if (totalTracesReviewed > 0 && totalCategories > 0) {
-    const tracesSinceLastCategory = totalTracesReviewed - lastNewCategoryTrace
-    if (tracesSinceLastCategory >= 10) saturationConfidence = Math.max(saturationConfidence, 0.9)
-    else if (tracesSinceLastCategory >= 5) saturationConfidence = Math.max(saturationConfidence, 0.6)
-  }
+  const reviewProgress = totalTraces > 0 ? tracesReviewed / totalTraces : 0
 
   return {
-    totalTracesReviewed,
-    totalCategories,
-    tracesPerNewCategory,
-    isApproachingSaturation: saturationConfidence >= 0.7,
-    saturationConfidence,
+    tracesReviewed,
+    totalTraces,
+    categoriesDiscovered,
+    newCategoriesInLast10,
+    saturationReached,
+    reviewProgress,
   }
 }
 

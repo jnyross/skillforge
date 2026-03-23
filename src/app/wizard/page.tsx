@@ -327,6 +327,12 @@ export default function WizardPage() {
         if (Array.isArray(config.allowedTools) && config.allowedTools.length > 0) {
           setAllowedTools(config.allowedTools.join(', '))
         }
+        if (Array.isArray(config.concreteExamples) && config.concreteExamples.length > 0) {
+          setConcreteExamples(config.concreteExamples)
+        }
+        if (typeof config.freedomLevel === 'string') {
+          setFreedomLevel(config.freedomLevel as 'high' | 'medium' | 'low')
+        }
       } catch {
         // ignore — proceed with just intent and mode
       }

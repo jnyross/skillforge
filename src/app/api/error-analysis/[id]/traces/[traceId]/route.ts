@@ -37,5 +37,16 @@ export async function PATCH(
     })
   }
 
+  // Update old category count if trace was previously assigned to a different category
+  if (trace.failureCategoryId && trace.failureCategoryId !== failureCategoryId) {
+    const oldCount = await prisma.errorAnalysisTrace.count({
+      where: { failureCategoryId: trace.failureCategoryId },
+    })
+    await prisma.failureCategory.update({
+      where: { id: trace.failureCategoryId },
+      data: { count: oldCount },
+    })
+  }
+
   return NextResponse.json(updated)
 }
