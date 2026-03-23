@@ -31,7 +31,10 @@ export async function POST(
   for (let i = 0; i < expanded.length && i < config.generatedTuples.length; i++) {
     await prisma.syntheticTuple.update({
       where: { id: config.generatedTuples[i].id },
-      data: { naturalLanguage: expanded[i].naturalLanguage },
+      data: {
+        naturalLanguage: expanded[i].naturalLanguage,
+        expectedOutcome: expanded[i].expectedOutcome || '',
+      },
     })
   }
 

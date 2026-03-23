@@ -327,11 +327,13 @@ export default function WizardPage() {
         if (Array.isArray(config.allowedTools) && config.allowedTools.length > 0) {
           setAllowedTools(config.allowedTools.join(', '))
         }
-        if (Array.isArray(config.concreteExamples) && config.concreteExamples.length > 0) {
-          setConcreteExamples(config.concreteExamples)
-        }
-        if (typeof config.freedomLevel === 'string') {
-          setFreedomLevel(config.freedomLevel as 'high' | 'medium' | 'low')
+        // concreteExamples and freedomLevel are top-level columns, not inside configJson
+        try {
+          const examples = JSON.parse(data.concreteExamples || '[]')
+          if (Array.isArray(examples) && examples.length > 0) setConcreteExamples(examples)
+        } catch { /* ignore */ }
+        if (typeof data.freedomLevel === 'string' && data.freedomLevel) {
+          setFreedomLevel(data.freedomLevel as 'high' | 'medium' | 'low')
         }
       } catch {
         // ignore — proceed with just intent and mode
