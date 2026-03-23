@@ -47,14 +47,30 @@ export async function POST(
   })
 
   if (!regressionSuite) {
-    regressionSuite = await prisma.evalSuite.create({
-      data: {
-        skillRepoId: trace.evalRun.skillRepoId,
-        name: 'Auto Regression Suite',
-        type: 'regression',
-        description: 'Automatically created from promoted traces',
-      },
-    })
+    try {
+      regressionSuite = await prisma.evalSuite.create({
+        data: {
+          skillRepoId: trace.evalRun.skillRepoId,
+          name: 'Auto Regression Suite',
+          type: 'regression',
+          description: 'Automatically created from promoted traces',
+        },
+      })
+    } catch (err) {
+      // Handle race condition: another request may have created the suite concurrently
+      const message = err instanceof Error ? err.message : String(err)
+      if (message.includes('Unique constraint')) {
+        regressionSuite = await prisma.evalSuite.findFirst({
+          where: {
+            skillRepoId: trace.evalRun.skillRepoId,
+            type: 'regression',
+          },
+        })
+        if (!regressionSuite) throw err
+      } else {
+        throw err
+      }
+    }
   }
 
   // Get the original prompt from the case run or trace
