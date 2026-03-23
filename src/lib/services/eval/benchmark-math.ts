@@ -239,7 +239,7 @@ function computeFailureClusters(
   // Group by tag signature
   const tagGroups = new Map<string, CaseResult[]>()
   for (const result of failedResults) {
-    const tagKey = result.tags.sort().join(',') || '(untagged)'
+    const tagKey = [...result.tags].sort().join(',') || '(untagged)'
     const group = tagGroups.get(tagKey) ?? []
     group.push(result)
     tagGroups.set(tagKey, group)

@@ -73,7 +73,7 @@ export async function handleEvalRunJob(
   })
 
   try {
-    const repoPath = getRepoPath(evalRun.skillRepo.slug)
+    const repoPath = evalRun.skillRepo.gitRepoPath
     const executor = createExecutor(evalRun.executorType as 'claude-cli' | 'mock')
     const executorConfig: ExecutorConfig = {
       model: evalRun.model,
@@ -138,7 +138,7 @@ export async function handleEvalRunJob(
             evalRunId,
             evalCaseId: evalCase.id,
             skillVersionId: evalRun.skillVersionId,
-            status: 'failed',
+            status: 'error',
             error: errorMsg,
           },
         })
@@ -173,17 +173,24 @@ export async function handleEvalRunJob(
 
     // Run baseline comparison if baseline version is set
     if (evalRun.baselineVersionId) {
-      const baselineCaseRuns = await prisma.evalCaseRun.findMany({
+      // Find the most recent completed eval run for the baseline version+suite
+      const baselineRun = await prisma.evalRun.findFirst({
         where: {
-          evalRun: {
-            skillVersionId: evalRun.baselineVersionId,
-            suiteId: evalRun.suiteId,
-            status: 'completed',
-          },
+          skillVersionId: evalRun.baselineVersionId,
+          suiteId: evalRun.suiteId,
+          status: 'completed',
         },
-        include: { assertions: true },
         orderBy: { createdAt: 'desc' },
+        select: { id: true },
       })
+
+      const baselineCaseRuns = baselineRun
+        ? await prisma.evalCaseRun.findMany({
+            where: { evalRunId: baselineRun.id },
+            include: { assertions: true },
+            orderBy: { createdAt: 'desc' },
+          })
+        : []
 
       if (baselineCaseRuns.length > 0) {
         const baselineResults: CaseResult[] = baselineCaseRuns.map(cr => ({
@@ -598,12 +605,4 @@ export async function startEvalRun(evalRunId: string): Promise<string> {
   })
 
   return jobId
-}
-
-/**
- * Get the repo path from the slug.
- */
-function getRepoPath(slug: string): string {
-  const basePath = process.env.SKILL_REPOS_PATH ?? './data/skill-repos'
-  return `${basePath}/${slug}.git`
 }
