@@ -111,19 +111,13 @@ export async function handleOptimizerJob(
   try {
     await runOptimizationLoop(optimizerRunId, run, config)
 
-    // Only mark as completed if not already stopped
-    const finalRun = await prisma.optimizerRun.findUnique({
-      where: { id: optimizerRunId },
-      select: { status: true },
+    // Only mark as completed if not already stopped — use conditional update
+    // to avoid TOCTOU race with the stop endpoint
+    const updateResult = await prisma.optimizerRun.updateMany({
+      where: { id: optimizerRunId, status: { not: 'stopped' } },
+      data: { status: 'completed', completedAt: new Date() },
     })
-    const finalStatus = finalRun?.status === 'stopped' ? 'stopped' : 'completed'
-
-    if (finalStatus !== 'stopped') {
-      await prisma.optimizerRun.update({
-        where: { id: optimizerRunId },
-        data: { status: 'completed', completedAt: new Date() },
-      })
-    }
+    const finalStatus = updateResult.count === 0 ? 'stopped' : 'completed'
 
     await logAuditEvent({
       action: `optimizer_run.${finalStatus}`,
@@ -135,20 +129,16 @@ export async function handleOptimizerJob(
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err)
 
-    // Only mark as failed if not already stopped
-    const currentRun = await prisma.optimizerRun.findUnique({
-      where: { id: optimizerRunId },
-      select: { status: true },
+    // Only mark as failed if not already stopped — use conditional update
+    // to avoid TOCTOU race with the stop endpoint
+    const failResult = await prisma.optimizerRun.updateMany({
+      where: { id: optimizerRunId, status: { not: 'stopped' } },
+      data: { status: 'failed', completedAt: new Date() },
     })
-    if (currentRun?.status !== 'stopped') {
-      await prisma.optimizerRun.update({
-        where: { id: optimizerRunId },
-        data: { status: 'failed', completedAt: new Date() },
-      })
-    }
+    const failStatus = failResult.count === 0 ? 'stopped' : 'failed'
 
     await logAuditEvent({
-      action: currentRun?.status === 'stopped' ? 'optimizer_run.stopped' : 'optimizer_run.failed',
+      action: `optimizer_run.${failStatus}`,
       entityType: 'optimizer_run',
       entityId: optimizerRunId,
       details: { error: errorMsg },
@@ -180,7 +170,7 @@ async function runOptimizationLoop(
     }
 
     // Check budget limit
-    if (config.maxBudgetUsd && accumulatedCostUsd >= config.maxBudgetUsd) {
+    if (config.maxBudgetUsd != null && accumulatedCostUsd >= config.maxBudgetUsd) {
       break
     }
 
