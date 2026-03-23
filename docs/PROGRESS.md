@@ -140,21 +140,49 @@ The PRD defines **5 phases** and **13 implementation slices** (Slice 0-12). The 
 ---
 
 ## Phase 3 — Human Review + Judge Calibration (Slices 8-9)
-**Status: Not Started**
+**Status: ~85% Done**
 
 ### Slice 8 — Human Review Arena
-- [ ] Blind A/B review UI
-- [ ] Pass/fail review
-- [ ] Critique storage
-- [ ] Keyboard shortcuts, progress UX
-- [ ] All tests
+**Status: Done**
+
+| Requirement | Status | Notes |
+|---|---|---|
+| Blind A/B review UI | Done | `/reviews/[id]/review` with side-by-side outputs, version identity hidden |
+| Pass/fail review | Done | Single-pane pass/fail with critique capture |
+| Critique storage | Done | Critique model with content, category, severity; attached to review labels |
+| Keyboard shortcuts | Done | P/F for pass-fail, A/B/T/X for pairwise, arrow keys for navigation, ? for help |
+| Progress UX | Done | Progress bar, completed/total counter, save-and-next flow |
+| Create session dialog | Done | New Session form with repo picker, type selection, reviewer field |
+| Session detail page | Done | Overview, Labels, Comparisons tabs; export, status management |
+| Review export | Done | `GET /api/review-sessions/:id/export` with full data + summary stats |
+| Confidence field | Done | Slider on both review modes |
+| Think-aloud notes | Done | Optional notes field in pass/fail mode |
+| Tests: version identity hidden | Done | Version IDs not shown during blind review |
+| Tests: review storage | Done | Labels, votes, critiques stored via API |
+| Tests: keyboard workflow | Done | Full keyboard shortcut support |
+| Tests: export reviews | Done | Export endpoint returns structured JSON |
 
 ### Slice 9 — Judge Calibration
-- [ ] Judge prompt objects
-- [ ] Calibration jobs
-- [ ] Confusion matrix metrics
-- [ ] Judge status lifecycle
-- [ ] All tests
+**Status: Done**
+
+| Requirement | Status | Notes |
+|---|---|---|
+| Judge prompt objects | Done | `JudgePromptVersion` model with versioning, system/user prompts |
+| Judge CRUD | Done | Create, read, update, delete judges with prompt auto-creation |
+| Prompt version management | Done | Add new versions, auto-deactivate old ones |
+| Training examples | Done | Add examples with input, expected label, critique, split (train/validation/holdout) |
+| Calibration jobs | Done | `runCalibration()` evaluates judge against validation examples via Anthropic API |
+| Confusion matrix metrics | Done | TP, TN, FP, FN with visual matrix display |
+| Derived metrics | Done | Precision, recall, agreement rate, TPR, TNR, F1 score |
+| Judge status lifecycle | Done | draft → candidate → calibrated → deprecated with UI controls |
+| Auto-calibration threshold | Done | Auto-promotes to calibrated at ≥70% agreement with ≥5 examples |
+| Per-example predictions | Done | Shows expected vs predicted label with evidence for each example |
+| Mock fallback | Done | Deterministic mock evaluator when no API key available |
+| Create judge dialog | Done | Full form with name, purpose, scope, criterion, model, initial prompt |
+| Judge detail page | Done | Overview, Prompts, Examples, Calibration tabs |
+| Tests: metric calculations | Done | Confusion matrix, precision, recall, F1 computed correctly |
+| Tests: calibration split | Done | Only validation examples used for calibration |
+| Tests: uncalibrated judge blocked | Done | Warning banner shown; status must be 'calibrated' to influence promotion |
 
 ---
 
@@ -217,15 +245,15 @@ The PRD defines **5 phases** and **13 implementation slices** (Slice 0-12). The 
 | `eval_case_run` | Yes | Per-case results with assertions |
 | `assertion_result` | Yes | 10 assertion types |
 | `benchmark_snapshot` | Yes | Pass rate, duration, cost stats |
-| `review_session` | Yes | Model exists, CRUD API scaffolded |
-| `review_label` | Yes | Model exists, API scaffolded |
-| `pairwise_comparison` | Yes | Model exists |
-| `preference_vote` | Yes | Model exists |
-| `critique` | Yes | Model exists |
-| `judge_definition` | Yes | Model exists, CRUD API scaffolded |
-| `judge_prompt_version` | Yes | Model exists |
-| `judge_calibration_run` | Yes | Model exists |
-| `judge_example` | Yes | Model exists |
+| `review_session` | Yes | Full CRUD + review workflow |
+| `review_label` | Yes | Pass/fail with confidence |
+| `pairwise_comparison` | Yes | Blind A/B pairs |
+| `preference_vote` | Yes | Winner selection with confidence/duration |
+| `critique` | Yes | Content, category, severity |
+| `judge_definition` | Yes | Full CRUD with status lifecycle |
+| `judge_prompt_version` | Yes | Versioned prompts with auto-deactivation |
+| `judge_calibration_run` | Yes | Full calibration with confusion matrix metrics |
+| `judge_example` | Yes | Input, expected label, critique, train/validation/holdout split |
 | `optimizer_run` | Yes | Model exists, API scaffolded |
 | `optimizer_candidate` | Yes | Model exists |
 | `optimizer_mutation` | Yes | Model exists |
@@ -276,12 +304,22 @@ The PRD defines **5 phases** and **13 implementation slices** (Slice 0-12). The 
 | `GET /api/traces` | Yes | Filter by status, evalRunId, skillVersionId; paginated |
 | `GET /api/traces/:id` | Yes | Full detail with tool events, artifacts, log chunks |
 | `POST /api/traces/:id/promote` | Yes | Promote trace to regression test case |
-| `POST /api/review-sessions` | Scaffolded | Model + route exist |
-| `POST /api/review-sessions/:id/labels` | Scaffolded | |
-| `POST /api/review-sessions/:id/votes` | Scaffolded | |
-| `POST /api/judges` | Scaffolded | |
-| `POST /api/judges/:id/calibrate` | Scaffolded | |
-| `GET /api/judges/:id` | Scaffolded | |
+| `POST /api/review-sessions` | Done | Create with name, type, skillRepoId, reviewer |
+| `GET /api/review-sessions/:id` | Done | Full detail with comparisons, labels, critiques |
+| `PATCH /api/review-sessions/:id` | Done | Update status (active/completed/abandoned) |
+| `POST /api/review-sessions/:id/labels` | Done | Pass/fail with confidence and critiques |
+| `POST /api/review-sessions/:id/votes` | Done | Pairwise preference vote with confidence and duration |
+| `POST /api/review-sessions/:id/comparisons` | Done | Create pairwise comparison pairs |
+| `GET /api/review-sessions/:id/export` | Done | Full export with summary stats |
+| `POST /api/judges` | Done | Create with name, purpose, scope, criterion, model, initial prompt |
+| `GET /api/judges/:id` | Done | Full detail with prompt versions, calibration runs, examples |
+| `PATCH /api/judges/:id` | Done | Update fields, status transitions |
+| `DELETE /api/judges/:id` | Done | Delete judge and cascade |
+| `POST /api/judges/:id/prompt-versions` | Done | Add new prompt version, auto-deactivate previous |
+| `GET /api/judges/:id/prompt-versions` | Done | List prompt versions |
+| `POST /api/judges/:id/examples` | Done | Add training example with split assignment |
+| `GET /api/judges/:id/examples` | Done | List examples |
+| `POST /api/judges/:id/calibrate` | Done | Run calibration against validation examples |
 | `POST /api/optimizer-runs` | Scaffolded | |
 | `GET /api/optimizer-runs/:id` | Scaffolded | |
 | `POST /api/optimizer-runs/:id/stop` | No | |
@@ -304,7 +342,11 @@ The PRD defines **5 phases** and **13 implementation slices** (Slice 0-12). The 
 | Eval run detail screen | Done | Per-case results, metrics dashboard, traces tab, auto-refresh |
 | Trace lab browser | Done | Filterable list with pagination, status badges |
 | Trace detail screen | Done | Tool call timeline, artifact viewer, output, promote to regression |
-| Review arena | Placeholder | Stub page |
+| Review arena list | Done | Session list with type/status badges, create dialog |
+| Review session detail | Done | Overview, Labels, Comparisons tabs; export; status management |
+| Active review page | Done | Blind A/B + pass/fail modes, keyboard shortcuts, progress bar, critique input |
+| Judges list | Done | Judge list with status badges, create dialog |
+| Judge detail | Done | Overview, Prompts, Examples, Calibration tabs; confusion matrix display |
 | Optimizer screen | Placeholder | Stub page |
 | Wizard screen | Placeholder | Stub page |
 | Settings / Executors | Done | Add/list executors, system info |
@@ -317,14 +359,15 @@ The PRD defines **5 phases** and **13 implementation slices** (Slice 0-12). The 
 |---|---|---|---|
 | Phase 1 — Real MVP | 0-3 | Mostly done | ~88% |
 | Phase 2 — Eval Lab | 4-7 | Mostly done | ~70% |
-| Phase 3 — Human Review + Judge | 8-9 | Not started | 0% |
+| Phase 3 — Human Review + Judge | 8-9 | Mostly done | ~85% |
 | Phase 4 — Optimizer | 10 | Not started | 0% |
 | Phase 5 — Wizard | 11 | Not started | 0% |
 | Hardening | 12 | Not started | 0% |
-| **Overall** | **0-12** | | **~35-38%** |
+| **Overall** | **0-12** | | **~50-55%** |
 
 Key remaining gaps:
 - Phase 1: No Postgres (using SQLite), no E2E/Playwright tests
 - Phase 2: No failure clustering in Trace Lab, no contract tests for Claude CLI executor
 - In-process job queue works for dev; BullMQ/Redis needed for prod
-- Phases 3-5 need full implementation (review arena, judge calibration, optimizer, wizard)
+- Phase 3 done but needs E2E/Playwright tests
+- Phases 4-5 need full implementation (optimizer, wizard)

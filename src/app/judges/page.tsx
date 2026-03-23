@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { Scale, Plus } from 'lucide-react'
+import { useEffect, useState, useCallback } from 'react'
+import { Scale, Plus, ArrowRight } from 'lucide-react'
+import Link from 'next/link'
 
 interface JudgeDefinition {
   id: string
@@ -18,13 +19,43 @@ interface JudgeDefinition {
 export default function JudgesPage() {
   const [judges, setJudges] = useState<JudgeDefinition[]>([])
   const [loading, setLoading] = useState(true)
+  const [showCreate, setShowCreate] = useState(false)
+  const [form, setForm] = useState({
+    name: '', purpose: '', scope: '', targetCriterion: '', model: 'claude-sonnet-4-20250514',
+    systemPrompt: '', userPromptTemplate: '',
+  })
+  const [creating, setCreating] = useState(false)
+  const [error, setError] = useState('')
 
-  useEffect(() => {
-    fetch('/api/judges')
-      .then(r => r.json())
-      .then(data => { setJudges(data); setLoading(false) })
-      .catch(() => setLoading(false))
+  const loadJudges = useCallback(async () => {
+    const res = await fetch('/api/judges')
+    if (res.ok) {
+      setJudges(await res.json())
+    }
+    setLoading(false)
   }, [])
+
+  useEffect(() => { loadJudges() }, [loadJudges])
+
+  const createJudge = async () => {
+    if (!form.name) return
+    setCreating(true)
+    setError('')
+    const res = await fetch('/api/judges', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form),
+    })
+    if (res.ok) {
+      setForm({ name: '', purpose: '', scope: '', targetCriterion: '', model: 'claude-sonnet-4-20250514', systemPrompt: '', userPromptTemplate: '' })
+      setShowCreate(false)
+      loadJudges()
+    } else {
+      const data = await res.json()
+      setError(data.error || 'Failed to create judge')
+    }
+    setCreating(false)
+  }
 
   const statusColors: Record<string, string> = {
     draft: 'bg-gray-500/10 text-gray-400',
@@ -45,11 +76,100 @@ export default function JudgesPage() {
             Create and calibrate LLM judges against human labels
           </p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm hover:bg-primary/90">
+        <button
+          onClick={() => setShowCreate(!showCreate)}
+          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm hover:bg-primary/90"
+        >
           <Plus className="h-4 w-4" />
           New Judge
         </button>
       </div>
+
+      {showCreate && (
+        <div className="border border-border rounded-lg p-4 space-y-4">
+          <h3 className="font-medium">Create Judge</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm text-muted-foreground">Name *</label>
+              <input
+                className="w-full mt-1 px-3 py-2 bg-background border border-border rounded-md text-sm"
+                placeholder="e.g. Code Quality Judge"
+                value={form.name}
+                onChange={e => setForm({ ...form, name: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-sm text-muted-foreground">Model</label>
+              <input
+                className="w-full mt-1 px-3 py-2 bg-background border border-border rounded-md text-sm"
+                value={form.model}
+                onChange={e => setForm({ ...form, model: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-sm text-muted-foreground">Purpose</label>
+              <input
+                className="w-full mt-1 px-3 py-2 bg-background border border-border rounded-md text-sm"
+                placeholder="What does this judge evaluate?"
+                value={form.purpose}
+                onChange={e => setForm({ ...form, purpose: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-sm text-muted-foreground">Target Criterion</label>
+              <input
+                className="w-full mt-1 px-3 py-2 bg-background border border-border rounded-md text-sm"
+                placeholder="e.g. Does the output follow coding conventions?"
+                value={form.targetCriterion}
+                onChange={e => setForm({ ...form, targetCriterion: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-sm text-muted-foreground">Scope</label>
+              <input
+                className="w-full mt-1 px-3 py-2 bg-background border border-border rounded-md text-sm"
+                placeholder="e.g. TypeScript skills"
+                value={form.scope}
+                onChange={e => setForm({ ...form, scope: e.target.value })}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-sm text-muted-foreground">System Prompt (optional, creates v1)</label>
+            <textarea
+              className="w-full mt-1 px-3 py-2 bg-background border border-border rounded-md text-sm font-mono min-h-[80px]"
+              placeholder="You are a binary judge..."
+              value={form.systemPrompt}
+              onChange={e => setForm({ ...form, systemPrompt: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="text-sm text-muted-foreground">User Prompt Template (optional)</label>
+            <textarea
+              className="w-full mt-1 px-3 py-2 bg-background border border-border rounded-md text-sm font-mono min-h-[80px]"
+              placeholder={'Use {{input}} and {{criterion}} as placeholders'}
+              value={form.userPromptTemplate}
+              onChange={e => setForm({ ...form, userPromptTemplate: e.target.value })}
+            />
+          </div>
+          {error && <p className="text-sm text-red-400">{error}</p>}
+          <div className="flex gap-2">
+            <button
+              onClick={createJudge}
+              disabled={creating || !form.name}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm hover:bg-primary/90 disabled:opacity-50"
+            >
+              {creating ? 'Creating...' : 'Create Judge'}
+            </button>
+            <button
+              onClick={() => { setShowCreate(false); setError('') }}
+              className="px-4 py-2 border border-border rounded-md text-sm hover:bg-accent"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="text-muted-foreground">Loading...</div>
@@ -69,9 +189,10 @@ export default function JudgesPage() {
       ) : (
         <div className="space-y-3">
           {judges.map(judge => (
-            <div
+            <Link
               key={judge.id}
-              className="border border-border rounded-lg p-4 hover:bg-accent transition-colors"
+              href={`/judges/${judge.id}`}
+              className="block border border-border rounded-lg p-4 hover:bg-accent transition-colors"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -84,12 +205,13 @@ export default function JudgesPage() {
                   <span>{judge._count.examples} examples</span>
                   <span>{judge._count.calibrationRuns} calibrations</span>
                   <span>{judge.model}</span>
+                  <ArrowRight className="h-4 w-4" />
                 </div>
               </div>
               {judge.purpose && (
                 <p className="text-sm text-muted-foreground mt-2">{judge.purpose}</p>
               )}
-            </div>
+            </Link>
           ))}
         </div>
       )}

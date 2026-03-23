@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { runCalibration } from '@/lib/services/judge/calibration-service'
 
 export async function POST(
   request: NextRequest,
@@ -10,7 +11,10 @@ export async function POST(
 
   const judge = await prisma.judgeDefinition.findUnique({
     where: { id: params.id },
-    include: { promptVersions: true },
+    include: {
+      promptVersions: true,
+      examples: true,
+    },
   })
 
   if (!judge) {
@@ -25,13 +29,10 @@ export async function POST(
     return NextResponse.json({ error: 'No active prompt version found' }, { status: 400 })
   }
 
-  const exampleCount = await prisma.judgeExample.count({
-    where: { judgeId: params.id },
-  })
-
-  if (exampleCount === 0) {
+  const validationExamples = judge.examples.filter(e => e.split === 'validation')
+  if (validationExamples.length === 0) {
     return NextResponse.json(
-      { error: 'No calibration examples found. Add labeled examples first.' },
+      { error: 'No validation examples found. Add examples with split="validation" first.' },
       { status: 400 }
     )
   }
@@ -40,10 +41,23 @@ export async function POST(
     data: {
       judgeId: params.id,
       promptVersionId: promptVersion.id,
-      status: 'pending',
-      totalExamples: exampleCount,
+      status: 'running',
+      totalExamples: validationExamples.length,
     },
   })
+
+  // Run calibration asynchronously — fire and forget
+  runCalibration(calibrationRun.id, judge, promptVersion, validationExamples)
+    .catch(async (err) => {
+      await prisma.judgeCalibrationRun.update({
+        where: { id: calibrationRun.id },
+        data: {
+          status: 'failed',
+          metricsJson: JSON.stringify({ error: err instanceof Error ? err.message : String(err) }),
+          completedAt: new Date(),
+        },
+      })
+    })
 
   return NextResponse.json(calibrationRun, { status: 201 })
 }
