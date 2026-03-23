@@ -319,7 +319,7 @@ export default function OptimizerPage() {
                 <div className="w-full bg-secondary rounded-full h-1.5">
                   <div
                     className="bg-primary h-1.5 rounded-full transition-all"
-                    style={{ width: `${(run.currentIteration / run.maxIterations) * 100}%` }}
+                    style={{ width: `${run.maxIterations > 0 ? (run.currentIteration / run.maxIterations) * 100 : 0}%` }}
                   />
                 </div>
               </div>

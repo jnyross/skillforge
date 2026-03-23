@@ -7,10 +7,10 @@ let handlersRegistered = false
 
 async function ensureHandlers() {
   if (handlersRegistered) return
-  handlersRegistered = true
 
   const { handleOptimizerJob } = await import('@/lib/services/optimizer/optimizer-engine')
   registerJobHandler('optimizer', handleOptimizerJob)
+  handlersRegistered = true
 }
 
 export async function POST(
