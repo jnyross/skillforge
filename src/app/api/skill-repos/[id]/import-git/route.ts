@@ -4,6 +4,7 @@ import { createVersion } from '@/lib/services/git-storage'
 import { parseSkillMd, estimateTokenCount, countLines } from '@/lib/services/skill-parser'
 import { lintSkill } from '@/lib/validators/skill-linter'
 import type { SkillFile } from '@/types/skill'
+import simpleGit from 'simple-git'
 import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
@@ -64,19 +65,15 @@ export async function POST(
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'skillforge-git-import-'))
 
   try {
-    // Clone the repository
-    const { exec } = await import('child_process')
-    const { promisify } = await import('util')
-    const execAsync = promisify(exec)
-
-    const cloneArgs = ['git', 'clone', '--depth', '1']
+    // Clone the repository using simple-git (safe from shell injection)
+    const git = simpleGit()
+    const cloneOpts = ['--depth', '1']
     if (branch) {
-      cloneArgs.push('--branch', branch)
+      cloneOpts.push('--branch', branch)
     }
-    cloneArgs.push(url, path.join(tmpDir, 'repo'))
 
     try {
-      await execAsync(cloneArgs.join(' '), { timeout: 60000 })
+      await git.clone(url, path.join(tmpDir, 'repo'), cloneOpts)
     } catch (cloneErr) {
       const errMsg = cloneErr instanceof Error ? cloneErr.message : String(cloneErr)
       await prisma.gitImportLog.update({
