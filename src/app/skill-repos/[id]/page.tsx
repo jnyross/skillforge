@@ -548,7 +548,7 @@ export default function SkillRepoPage() {
                         <Label htmlFor="gitUrl">Git URL</Label>
                         <Input
                           id="gitUrl"
-                          placeholder="https://github.com/user/repo.git"
+                          placeholder="https://git.example.com/user/repo.git"
                           value={gitUrl}
                           onChange={(e) => setGitUrl(e.target.value)}
                         />
