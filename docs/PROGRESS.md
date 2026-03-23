@@ -90,36 +90,52 @@ The PRD defines **5 phases** and **13 implementation slices** (Slice 0-12). The 
 ---
 
 ## Phase 2 — Eval Lab (Slices 4-7)
-**Status: Not Started**
+**Status: ~70% Done**
 
 ### Slice 4 — Real Claude CLI Smoke Executor
-- [ ] Executor adapter interface
-- [ ] CLI runner (`ClaudeCliExecutor`)
-- [ ] Temp workspace materializer
-- [ ] Artifact capture
-- [ ] Trace persistence
-- [ ] All tests
+**Status: Done**
+
+| Requirement | Status | Notes |
+|---|---|---|
+| Executor adapter interface | Done | Abstract `Executor` interface with `ClaudeCliExecutor` and `MockExecutor` |
+| CLI runner (`ClaudeCliExecutor`) | Done | Parses JSON output, captures tool events/artifacts |
+| Temp workspace materializer | Done | `createWorkspace()` with path traversal protection |
+| Artifact capture | Done | `captureArtifacts()` scans workspace for output files |
+| Trace persistence | Done | `createTrace()` stores traces, tool events, artifacts, log chunks |
+| Tests | Done | Unit tests for assertion engine, trigger engine, benchmark math |
 
 ### Slice 5 — Trigger Evals
-- [ ] Trigger suite CRUD
-- [ ] Repeated trigger runs
-- [ ] Metric computation (precision, recall, F1, etc.)
-- [ ] Description comparison screen
-- [ ] All tests
+**Status: Done**
+
+| Requirement | Status | Notes |
+|---|---|---|
+| Trigger suite CRUD | Done | `POST/GET /api/eval-suites`, type=trigger |
+| Repeated trigger runs | Done | `executeTriggerCase()` with configurable repeat count |
+| Metric computation | Done | Precision, recall, F1, shouldTrigger/shouldNotTrigger rates |
+| Description comparison screen | Done | Eval suite detail page with cases list and run results |
+| Tests | Done | `trigger-engine.test.ts` with comprehensive tests |
 
 ### Slice 6 — Output/Workflow Evals
-- [ ] Eval case CRUD
-- [ ] Baseline vs candidate runs
-- [ ] Assertion engine (code, LLM-judged, human)
-- [ ] Benchmark summaries
-- [ ] All tests
+**Status: Done**
+
+| Requirement | Status | Notes |
+|---|---|---|
+| Eval case CRUD | Done | Full CRUD for cases with fixtures, split, tags |
+| Baseline vs candidate runs | Done | `baselineVersionId` on eval runs, comparison in benchmark math |
+| Assertion engine | Done | 10 assertion types: exact, contains, regex, json-schema, file-exists, file-contains, json-path, custom, not-contains, count |
+| Benchmark summaries | Done | `computeBenchmarkSummary()` with pass rate, duration stats, cost aggregation |
+| Tests | Done | `assertion-engine.test.ts`, `benchmark-math.test.ts` |
 
 ### Slice 7 — Trace Lab
-- [ ] Trace browser
-- [ ] Artifact viewer
-- [ ] Failure clustering v1
-- [ ] Promote trace to regression
-- [ ] All tests
+**Status: Mostly Done**
+
+| Requirement | Status | Notes |
+|---|---|---|
+| Trace browser | Done | `/traces` page with filtering (status), pagination, linked to eval runs |
+| Artifact viewer | Done | `/traces/[id]` page shows artifacts with content preview |
+| Failure clustering v1 | **Not done** | Basic status filtering exists, but no ML-based clustering |
+| Promote trace to regression | Done | `POST /api/traces/:id/promote` creates regression case from trace |
+| Tests | Partial | Backend unit tests exist; no E2E tests |
 
 ---
 
@@ -194,30 +210,30 @@ The PRD defines **5 phases** and **13 implementation slices** (Slice 0-12). The 
 | `version_tag` | Yes | As `VersionTag` Prisma model for semantic labels |
 | `git_import_log` | Yes | As `GitImportLog` Prisma model for tracking git imports |
 | `artifact_blob` | No | |
-| `eval_suite` | No | |
-| `eval_case` | No | |
-| `eval_case_fixture` | No | |
-| `eval_run` | No | |
-| `eval_case_run` | No | |
-| `assertion_result` | No | |
-| `benchmark_snapshot` | No | |
-| `review_session` | No | |
-| `review_label` | No | |
-| `pairwise_comparison` | No | |
-| `preference_vote` | No | |
-| `critique` | No | |
-| `judge_definition` | No | |
-| `judge_prompt_version` | No | |
-| `judge_calibration_run` | No | |
-| `judge_example` | No | |
-| `optimizer_run` | No | |
-| `optimizer_candidate` | No | |
-| `optimizer_mutation` | No | |
-| `optimizer_decision` | No | |
-| `trace` | No | |
-| `tool_event` | No | |
-| `run_artifact` | No | |
-| `log_chunk` | No | |
+| `eval_suite` | Yes | Full CRUD with type validation, freeze/unfreeze |
+| `eval_case` | Yes | CRUD with fixtures, split, tags, shouldTrigger |
+| `eval_case_fixture` | Yes | File/directory/env/config fixtures |
+| `eval_run` | Yes | Create, start, cancel, status tracking, metrics |
+| `eval_case_run` | Yes | Per-case results with assertions |
+| `assertion_result` | Yes | 10 assertion types |
+| `benchmark_snapshot` | Yes | Pass rate, duration, cost stats |
+| `review_session` | Yes | Model exists, CRUD API scaffolded |
+| `review_label` | Yes | Model exists, API scaffolded |
+| `pairwise_comparison` | Yes | Model exists |
+| `preference_vote` | Yes | Model exists |
+| `critique` | Yes | Model exists |
+| `judge_definition` | Yes | Model exists, CRUD API scaffolded |
+| `judge_prompt_version` | Yes | Model exists |
+| `judge_calibration_run` | Yes | Model exists |
+| `judge_example` | Yes | Model exists |
+| `optimizer_run` | Yes | Model exists, API scaffolded |
+| `optimizer_candidate` | Yes | Model exists |
+| `optimizer_mutation` | Yes | Model exists |
+| `optimizer_decision` | Yes | Model exists |
+| `trace` | Yes | Full trace with tool events, artifacts, log chunks |
+| `tool_event` | Yes | Ordered sequence of tool calls |
+| `run_artifact` | Yes | File artifacts with content |
+| `log_chunk` | Yes | stdout/stderr/system streams |
 | `LintResult` | Yes | (Not in PRD data model but implemented) |
 
 ---
@@ -245,23 +261,32 @@ The PRD defines **5 phases** and **13 implementation slices** (Slice 0-12). The 
 | `GET /api/skill-repos/:id/lint/:versionId` | Yes | With summary stats (error/warning/info counts) |
 | `GET /api/skill-repos/:id/branches` | Yes | |
 | `POST /api/skill-repos/:id/branches` | Yes | |
-| `POST /api/eval-suites` | No | |
-| `POST /api/eval-suites/:id/cases` | No | |
-| `POST /api/eval-runs` | No | |
-| `GET /api/eval-runs/:id` | No | |
-| `GET /api/eval-runs/:id/traces` | No | |
-| `POST /api/eval-runs/:id/promote-failures-to-regression` | No | |
-| `POST /api/review-sessions` | No | |
-| `POST /api/review-sessions/:id/labels` | No | |
-| `POST /api/review-sessions/:id/votes` | No | |
-| `POST /api/judges` | No | |
-| `POST /api/judges/:id/calibrate` | No | |
-| `GET /api/judges/:id` | No | |
-| `POST /api/optimizer-runs` | No | |
-| `GET /api/optimizer-runs/:id` | No | |
+| `POST /api/eval-suites` | Yes | With type validation, duplicate name check |
+| `GET /api/eval-suites` | Yes | Filter by skillRepoId |
+| `GET /api/eval-suites/:id` | Yes | Full detail with case/run counts |
+| `PATCH /api/eval-suites/:id` | Yes | Freeze/unfreeze |
+| `POST /api/eval-suites/:id/cases` | Yes | Full case creation with fixtures |
+| `GET /api/eval-suites/:id/cases` | Yes | List cases for suite |
+| `PATCH /api/eval-suites/:id/cases/:caseId` | Yes | Update case |
+| `DELETE /api/eval-suites/:id/cases/:caseId` | Yes | Delete case |
+| `POST /api/eval-runs` | Yes | Create with version, suite, executor config |
+| `GET /api/eval-runs/:id` | Yes | Full detail with case runs, assertions, benchmarks |
+| `POST /api/eval-runs/:id/start` | Yes | Enqueue job, register handlers on first call |
+| `GET /api/eval-runs/:id/traces` | Yes | List traces for a run |
+| `GET /api/traces` | Yes | Filter by status, evalRunId, skillVersionId; paginated |
+| `GET /api/traces/:id` | Yes | Full detail with tool events, artifacts, log chunks |
+| `POST /api/traces/:id/promote` | Yes | Promote trace to regression test case |
+| `POST /api/review-sessions` | Scaffolded | Model + route exist |
+| `POST /api/review-sessions/:id/labels` | Scaffolded | |
+| `POST /api/review-sessions/:id/votes` | Scaffolded | |
+| `POST /api/judges` | Scaffolded | |
+| `POST /api/judges/:id/calibrate` | Scaffolded | |
+| `GET /api/judges/:id` | Scaffolded | |
+| `POST /api/optimizer-runs` | Scaffolded | |
+| `GET /api/optimizer-runs/:id` | Scaffolded | |
 | `POST /api/optimizer-runs/:id/stop` | No | |
 | `POST /api/optimizer-runs/:id/promote-candidate/:candidateId` | No | |
-| `POST /api/wizard/draft` | No | |
+| `POST /api/wizard/draft` | Scaffolded | |
 | `POST /api/wizard/draft/:id/generate` | No | |
 | `POST /api/wizard/draft/:id/save` | No | |
 
@@ -274,11 +299,15 @@ The PRD defines **5 phases** and **13 implementation slices** (Slice 0-12). The 
 | Main navigation sidebar | Yes | With disabled placeholders for future sections |
 | Repository list screen | Yes | With lint status badges |
 | Version detail screen | Mostly Done | Overview (with author, tags), files, scorecard, lint, diff tabs; import/export; missing linked evals/reviews/optimizer |
-| Eval run screen | No | |
-| Review arena | No | |
-| Optimizer screen | No | |
-| Wizard screen | No | |
-| Settings / Executors | No | |
+| Eval suites list screen | Done | List with type badges, create suite dialog |
+| Eval suite detail screen | Done | Cases list, run history, add case form, start run form |
+| Eval run detail screen | Done | Per-case results, metrics dashboard, traces tab, auto-refresh |
+| Trace lab browser | Done | Filterable list with pagination, status badges |
+| Trace detail screen | Done | Tool call timeline, artifact viewer, output, promote to regression |
+| Review arena | Placeholder | Stub page |
+| Optimizer screen | Placeholder | Stub page |
+| Wizard screen | Placeholder | Stub page |
+| Settings / Executors | Done | Add/list executors, system info |
 
 ---
 
@@ -287,16 +316,15 @@ The PRD defines **5 phases** and **13 implementation slices** (Slice 0-12). The 
 | Phase | Slices | Status | Completion |
 |---|---|---|---|
 | Phase 1 — Real MVP | 0-3 | Mostly done | ~88% |
-| Phase 2 — Eval Lab | 4-7 | Not started | 0% |
+| Phase 2 — Eval Lab | 4-7 | Mostly done | ~70% |
 | Phase 3 — Human Review + Judge | 8-9 | Not started | 0% |
 | Phase 4 — Optimizer | 10 | Not started | 0% |
 | Phase 5 — Wizard | 11 | Not started | 0% |
 | Hardening | 12 | Not started | 0% |
-| **Overall** | **0-12** | | **~18-20%** |
+| **Overall** | **0-12** | | **~35-38%** |
 
-Key remaining gaps in Phase 1:
-- No Postgres (using SQLite)
-- No Redis/BullMQ worker infrastructure
-- No E2E/Playwright tests
-- No Claude CLI execution harness
-- No smoke eval support
+Key remaining gaps:
+- Phase 1: No Postgres (using SQLite), no E2E/Playwright tests
+- Phase 2: No failure clustering in Trace Lab, no contract tests for Claude CLI executor
+- In-process job queue works for dev; BullMQ/Redis needed for prod
+- Phases 3-5 need full implementation (review arena, judge calibration, optimizer, wizard)

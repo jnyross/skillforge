@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
       skillVersion: { select: { id: true, commitMessage: true, gitCommitSha: true } },
       baselineVersion: { select: { id: true, commitMessage: true, gitCommitSha: true } },
       suite: { select: { id: true, name: true, type: true } },
-      _count: { select: { caseRuns: true } },
+      _count: { select: { caseRuns: true, traces: true } },
     },
     orderBy: { createdAt: 'desc' },
   })
