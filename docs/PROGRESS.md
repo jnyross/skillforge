@@ -187,15 +187,28 @@ The PRD defines **5 phases** and **13 implementation slices** (Slice 0-12). The 
 ---
 
 ## Phase 4 — AutoResearch / Optimizer (Slice 10)
-**Status: Not Started**
+**Status: Done**
 
 ### Slice 10 — Optimizer
-- [ ] Bounded candidate loop
-- [ ] Mutation operators v1
-- [ ] Train/validation/holdout discipline
-- [ ] Keep/discard/crash logs
-- [ ] Promotion gating
-- [ ] All tests
+**Status: Done**
+
+| Requirement | Status | Notes |
+|---|---|---|
+| Bounded candidate loop | Done | `optimizer-engine.ts` with configurable maxIterations, budget limits |
+| Mutation operators v1 | Done | `mutation-service.ts` with 6 modes, 13 operators, Anthropic API + mock fallback |
+| Train/validation/holdout discipline | Done | `objective-scoring.ts` with weighted metrics, frozen holdout enforcement |
+| Keep/discard/crash logs | Done | Candidate lifecycle: queued → running → keep/discard/crash/blocked |
+| Promotion gating | Done | `shouldKeepCandidate()` with validation improvement OR holdout improvement rules |
+| Optimizer run detail page | Done | Expandable candidates, mutations, diffs, objective breakdown, start/stop, promote |
+| Optimizer list page | Done | Run list with progress bars, create dialog with repo/version/suite selection |
+| API: start optimizer | Done | `POST /api/optimizer-runs/:id/start` enqueues job |
+| API: stop optimizer | Done | `POST /api/optimizer-runs/:id/stop` with status validation |
+| API: promote candidate | Done | `POST /api/optimizer-runs/:id/promote/:candidateId` with champion tracking |
+| API: candidate detail | Done | `GET /api/optimizer-runs/:id/candidates/:candidateId` |
+| Objective scoring | Done | Weighted: assertion (0.35), regression (0.20), trigger (0.15), judge (0.10), penalties (0.20) |
+| Duration/token penalties | Done | >2x baseline penalized |
+| Candidate lineage | Done | Parent/child version tracking via parentVersionId |
+| Tests | Partial | Unit tests for scoring; no E2E tests yet |
 
 ---
 
@@ -320,10 +333,12 @@ The PRD defines **5 phases** and **13 implementation slices** (Slice 0-12). The 
 | `POST /api/judges/:id/examples` | Done | Add training example with split assignment |
 | `GET /api/judges/:id/examples` | Done | List examples |
 | `POST /api/judges/:id/calibrate` | Done | Run calibration against validation examples |
-| `POST /api/optimizer-runs` | Scaffolded | |
-| `GET /api/optimizer-runs/:id` | Scaffolded | |
-| `POST /api/optimizer-runs/:id/stop` | No | |
-| `POST /api/optimizer-runs/:id/promote-candidate/:candidateId` | No | |
+| `POST /api/optimizer-runs` | Done | Create with skillRepoId, baselineVersionId, suiteIds, maxIterations, budget |
+| `GET /api/optimizer-runs/:id` | Done | Full detail with candidates, decisions, mutations |
+| `POST /api/optimizer-runs/:id/start` | Done | Enqueue optimizer job |
+| `POST /api/optimizer-runs/:id/stop` | Done | Stop running/queued optimizer |
+| `GET /api/optimizer-runs/:id/candidates/:candidateId` | Done | Candidate detail with versions and mutations |
+| `POST /api/optimizer-runs/:id/promote/:candidateId` | Done | Promote candidate to champion |
 | `POST /api/wizard/draft` | Scaffolded | |
 | `POST /api/wizard/draft/:id/generate` | No | |
 | `POST /api/wizard/draft/:id/save` | No | |
@@ -347,7 +362,8 @@ The PRD defines **5 phases** and **13 implementation slices** (Slice 0-12). The 
 | Active review page | Done | Blind A/B + pass/fail modes, keyboard shortcuts, progress bar, critique input |
 | Judges list | Done | Judge list with status badges, create dialog |
 | Judge detail | Done | Overview, Prompts, Examples, Calibration tabs; confusion matrix display |
-| Optimizer screen | Placeholder | Stub page |
+| Optimizer list screen | Done | Run list with progress bars, status badges, create dialog |
+| Optimizer detail screen | Done | Candidates table, mutations, diffs, objective scores, start/stop/promote |
 | Wizard screen | Placeholder | Stub page |
 | Settings / Executors | Done | Add/list executors, system info |
 
@@ -360,14 +376,15 @@ The PRD defines **5 phases** and **13 implementation slices** (Slice 0-12). The 
 | Phase 1 — Real MVP | 0-3 | Mostly done | ~88% |
 | Phase 2 — Eval Lab | 4-7 | Mostly done | ~70% |
 | Phase 3 — Human Review + Judge | 8-9 | Mostly done | ~85% |
-| Phase 4 — Optimizer | 10 | Not started | 0% |
+| Phase 4 — Optimizer | 10 | Done | ~90% |
 | Phase 5 — Wizard | 11 | Not started | 0% |
 | Hardening | 12 | Not started | 0% |
-| **Overall** | **0-12** | | **~50-55%** |
+| **Overall** | **0-12** | | **~60-65%** |
 
 Key remaining gaps:
 - Phase 1: No Postgres (using SQLite), no E2E/Playwright tests
 - Phase 2: No failure clustering in Trace Lab, no contract tests for Claude CLI executor
 - In-process job queue works for dev; BullMQ/Redis needed for prod
 - Phase 3 done but needs E2E/Playwright tests
-- Phases 4-5 need full implementation (optimizer, wizard)
+- Phase 4 done but needs E2E tests
+- Phase 5 needs full implementation (wizard)
