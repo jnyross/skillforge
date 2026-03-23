@@ -13,7 +13,7 @@ The PRD defines **5 phases** and **13 implementation slices** (Slice 0-12). The 
 ## Phase 1 — Real MVP
 
 ### Slice 0 — Scaffold
-**Status: Partially Done**
+**Status: Mostly Done**
 
 | Requirement | Status | Notes |
 |---|---|---|
@@ -22,11 +22,11 @@ The PRD defines **5 phases** and **13 implementation slices** (Slice 0-12). The 
 | PostgreSQL | **Not done** | Using SQLite instead (PRD specifies Postgres) |
 | Redis + BullMQ | **Not done** | No queue/worker infrastructure |
 | Local blob storage | Partial | Git repos stored on local filesystem |
-| CI | **Not done** | No CI pipeline configured |
+| CI | Done | GitHub Actions: lint, build, test on push/PR |
 | Lint/format/test commands | Done | ESLint, Vitest configured |
 | GitHub repo initialized | Done | Repo exists with commits |
 | Health endpoint test | Done | `GET /api/health` |
-| DB migration smoke test | **Not done** | Using `prisma db push`, no migrations |
+| DB migration smoke test | Done | Prisma migrations set up (`prisma migrate dev`) |
 | Queue smoke test | **Not done** | No queue system |
 
 ### Slice 1 — Skill Parser and Validator
@@ -34,7 +34,7 @@ The PRD defines **5 phases** and **13 implementation slices** (Slice 0-12). The 
 
 | Requirement | Status | Notes |
 |---|---|---|
-| File upload/import | Done | Import from zip, JSON files, and local folder via `POST /api/skill-repos/:id/import` |
+| File upload/import | Done | Import from zip, JSON files, local folder, and git URL via `POST /api/skill-repos/:id/import` and `POST /api/skill-repos/:id/import-git` |
 | SKILL.md parser | Done | `skill-parser.ts` with gray-matter |
 | Frontmatter validation | Done | name, description, YAML parsing |
 | Spec compliance checks | Done | Hard validation layer |
@@ -60,15 +60,15 @@ The PRD defines **5 phases** and **13 implementation slices** (Slice 0-12). The 
 | Tests: file tree round-trip | Done | Tests writeFiles/readFiles round-trip |
 | Tests: diff correctness | Done | Tests diffVersions with add/modify/remove |
 | Tests: restore correctness | Done | Tests restoreVersion restores old content |
-| Tests: concurrent save protection | **Not done** | No concurrency handling |
+| Tests: concurrent save protection | Done | Optimistic locking via `expectedParentVersionId` on version creation (409 on conflict) |
 
 ### Slice 3 — Repository UI
-**Status: Partially Done**
+**Status: Mostly Done**
 
 | Requirement | Status | Notes |
 |---|---|---|
 | Repo list | Done | Home page with cards |
-| Version list | Done | Left sidebar in repo detail |
+| Version list | Done | Left sidebar in repo detail with tag badges |
 | Diff viewer | Done | Compare versions tab |
 | Save/restore flows | Done | New version dialog, restore button |
 | Tests: Playwright CRUD | **Not done** | No E2E tests |
@@ -79,11 +79,12 @@ The PRD defines **5 phases** and **13 implementation slices** (Slice 0-12). The 
 
 | Requirement | Status | Notes |
 |---|---|---|
-| Skill import/export (zip, folder, git URL) | Mostly Done | Import (zip, folder, JSON) + export (JSON, zip) done; git URL import not yet |
+| Skill import/export (zip, folder, git URL) | Done | Import (zip, folder, JSON, git URL) + export (JSON, zip) all implemented |
 | Manual run harness against real Claude Code CLI | **Not done** | |
 | Smoke eval support | **Not done** | |
-| Semantic labels/tags on versions | **Not done** | Schema lacks tags |
-| Author field on versions | Partial | Hardcoded to "user" |
+| Semantic labels/tags on versions | Done | `VersionTag` model + CRUD API + UI for add/remove tags |
+| Author field on versions | Done | Configurable `author` field on version creation (defaults to "user") |
+| Lint-by-version endpoint | Done | `GET /api/skill-repos/:id/lint/:versionId` with summary stats |
 | Associated files (references/, scripts/, assets/, evals/) | Partial | Can store arbitrary files but no specialized handling |
 
 ---
@@ -190,6 +191,8 @@ The PRD defines **5 phases** and **13 implementation slices** (Slice 0-12). The 
 | `skill_branch` | Partial | Branch name on version, no dedicated model |
 | `skill_version` | Yes | As `SkillVersion` Prisma model |
 | `skill_file` | No | Files stored in git, not DB |
+| `version_tag` | Yes | As `VersionTag` Prisma model for semantic labels |
+| `git_import_log` | Yes | As `GitImportLog` Prisma model for tracking git imports |
 | `artifact_blob` | No | |
 | `eval_suite` | No | |
 | `eval_case` | No | |
@@ -229,13 +232,17 @@ The PRD defines **5 phases** and **13 implementation slices** (Slice 0-12). The 
 | `PATCH /api/skill-repos/:id` | Yes | (extra, not in PRD) |
 | `DELETE /api/skill-repos/:id` | Yes | (extra, not in PRD) |
 | `POST /api/skill-repos/:id/import` | Yes | Supports zip, JSON files, folder path |
+| `POST /api/skill-repos/:id/import-git` | Yes | Clone from git URL with optional branch/subfolder |
 | `POST /api/skill-repos/:id/export` | Yes | Export by version as JSON or zip (`?format=zip`) |
-| `POST /api/skill-repos/:id/versions` | Yes | |
-| `GET /api/skill-repos/:id/versions/:versionId` | Yes | |
+| `POST /api/skill-repos/:id/versions` | Yes | With author, tags, optimistic locking support |
+| `GET /api/skill-repos/:id/versions/:versionId` | Yes | Includes tags in response |
+| `GET /api/skill-repos/:id/versions/:versionId/tags` | Yes | List tags for a version |
+| `POST /api/skill-repos/:id/versions/:versionId/tags` | Yes | Add tag to a version |
+| `DELETE /api/skill-repos/:id/versions/:versionId/tags` | Yes | Remove tag from a version |
 | `GET /api/skill-repos/:id/diff` | Yes | |
 | `POST /api/skill-repos/:id/restore/:versionId` | Yes | |
 | `POST /api/skill-repos/:id/lint` | Yes | |
-| `GET /api/skill-repos/:id/lint/:versionId` | No | |
+| `GET /api/skill-repos/:id/lint/:versionId` | Yes | With summary stats (error/warning/info counts) |
 | `GET /api/skill-repos/:id/branches` | Yes | |
 | `POST /api/skill-repos/:id/branches` | Yes | |
 | `POST /api/eval-suites` | No | |
@@ -265,8 +272,8 @@ The PRD defines **5 phases** and **13 implementation slices** (Slice 0-12). The 
 | PRD Screen | Implemented | Notes |
 |---|---|---|
 | Main navigation sidebar | Yes | With disabled placeholders for future sections |
-| Repository list screen | Yes | |
-| Version detail screen | Mostly Done | Overview, files, scorecard, lint, diff tabs; frontmatter display; import/export buttons; missing linked evals/reviews/optimizer |
+| Repository list screen | Yes | With lint status badges |
+| Version detail screen | Mostly Done | Overview (with author, tags), files, scorecard, lint, diff tabs; import/export; missing linked evals/reviews/optimizer |
 | Eval run screen | No | |
 | Review arena | No | |
 | Optimizer screen | No | |
@@ -279,20 +286,17 @@ The PRD defines **5 phases** and **13 implementation slices** (Slice 0-12). The 
 
 | Phase | Slices | Status | Completion |
 |---|---|---|---|
-| Phase 1 — Real MVP | 0-3 | Mostly done | ~75% |
+| Phase 1 — Real MVP | 0-3 | Mostly done | ~88% |
 | Phase 2 — Eval Lab | 4-7 | Not started | 0% |
 | Phase 3 — Human Review + Judge | 8-9 | Not started | 0% |
 | Phase 4 — Optimizer | 10 | Not started | 0% |
 | Phase 5 — Wizard | 11 | Not started | 0% |
 | Hardening | 12 | Not started | 0% |
-| **Overall** | **0-12** | | **~15-18%** |
+| **Overall** | **0-12** | | **~18-20%** |
 
-Key gaps even within Phase 1:
-- No CI pipeline
-- No import from git URL (zip/folder import done)
+Key remaining gaps in Phase 1:
 - No Postgres (using SQLite)
 - No Redis/BullMQ worker infrastructure
 - No E2E/Playwright tests
-- Git-storage integration tests added
 - No Claude CLI execution harness
 - No smoke eval support

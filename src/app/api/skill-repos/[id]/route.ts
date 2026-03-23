@@ -14,6 +14,7 @@ export async function GET(
     include: {
       versions: {
         orderBy: { createdAt: 'desc' },
+        include: { tags: { orderBy: { createdAt: 'asc' } } },
       },
       lintResults: {
         orderBy: { createdAt: 'desc' },

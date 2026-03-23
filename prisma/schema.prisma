@@ -21,6 +21,7 @@ model SkillRepo {
   currentChampionVersion  SkillVersion?  @relation("ChampionVersion", fields: [currentChampionVersionId], references: [id], onDelete: SetNull)
   versions                SkillVersion[] @relation("RepoVersions")
   lintResults             LintResult[]
+  gitImportLogs           GitImportLog[]
 }
 
 model SkillVersion {
@@ -43,9 +44,38 @@ model SkillVersion {
   parentVersion   SkillVersion? @relation("VersionLineage", fields: [parentVersionId], references: [id])
   childVersions   SkillVersion[] @relation("VersionLineage")
   lintResults     LintResult[]
+  tags            VersionTag[]
 
   @@index([skillRepoId, createdAt])
   @@index([skillRepoId, branchName, createdAt])
+}
+
+model VersionTag {
+  id              String       @id @default(uuid())
+  skillVersionId  String
+  name            String
+  color           String       @default("default")
+  createdAt       DateTime     @default(now())
+
+  skillVersion    SkillVersion @relation(fields: [skillVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([skillVersionId, name])
+  @@index([skillVersionId])
+}
+
+model GitImportLog {
+  id              String    @id @default(uuid())
+  skillRepoId     String
+  sourceUrl       String
+  status          String    @default("pending") // pending, cloning, importing, completed, failed
+  error           String?
+  skillVersionId  String?
+  createdAt       DateTime  @default(now())
+  completedAt     DateTime?
+
+  skillRepo       SkillRepo @relation(fields: [skillRepoId], references: [id], onDelete: Cascade)
+
+  @@index([skillRepoId])
 }
 
 model LintResult {

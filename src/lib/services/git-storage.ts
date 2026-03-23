@@ -12,7 +12,7 @@ export async function initSkillGitRepo(repoId: string): Promise<string> {
   await fs.mkdir(repoPath, { recursive: true })
 
   const git = simpleGit(repoPath)
-  await git.init()
+  await git.init(['--initial-branch=main'])
   await git.addConfig('user.email', 'skillforge@local')
   await git.addConfig('user.name', 'SkillForge')
 

@@ -36,6 +36,7 @@ export async function GET() {
 
   const lintByVersion = new Map<string, Array<{ severity: string }>>()
   for (const lr of lintResults) {
+    if (!lr.skillVersionId) continue
     const existing = lintByVersion.get(lr.skillVersionId) || []
     existing.push({ severity: lr.severity })
     lintByVersion.set(lr.skillVersionId, existing)

@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getFilesAtCommit } from '@/lib/services/git-storage'
 
 /**
- * GET /api/skill-repos/:id/versions/:versionId — Get version detail with files
+ * GET /api/skill-repos/:id/lint/:versionId — Get lint results for a specific version
  */
 export async function GET(
   _request: NextRequest,
@@ -16,21 +15,27 @@ export async function GET(
 
   const version = await prisma.skillVersion.findUnique({
     where: { id: params.versionId, skillRepoId: params.id },
-    include: {
-      lintResults: true,
-      tags: { orderBy: { createdAt: 'asc' } },
-    },
   })
 
   if (!version) {
     return NextResponse.json({ error: 'Version not found' }, { status: 404 })
   }
 
-  // Get files from git
-  const files = await getFilesAtCommit(repo.gitRepoPath, version.gitCommitSha)
+  const lintResults = await prisma.lintResult.findMany({
+    where: { skillVersionId: params.versionId },
+    orderBy: { createdAt: 'asc' },
+  })
+
+  const errorCount = lintResults.filter(r => r.severity === 'error').length
+  const warningCount = lintResults.filter(r => r.severity === 'warning').length
+  const infoCount = lintResults.filter(r => r.severity === 'info').length
 
   return NextResponse.json({
-    ...version,
-    files,
+    versionId: params.versionId,
+    issues: lintResults,
+    passed: errorCount === 0,
+    errorCount,
+    warningCount,
+    infoCount,
   })
 }
