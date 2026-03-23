@@ -305,6 +305,26 @@ export default function WizardPage() {
           warnings: evals.warnings || [],
         })
         setEditedSkillMd(data.generatedSkill)
+        // Also restore concreteExamples and freedomLevel so "Back to Edit" has them
+        try {
+          const examples = JSON.parse(data.concreteExamples || '[]')
+          if (Array.isArray(examples) && examples.length > 0) setConcreteExamples(examples)
+        } catch { /* ignore */ }
+        if (typeof data.freedomLevel === 'string' && data.freedomLevel) {
+          setFreedomLevel(data.freedomLevel as 'high' | 'medium' | 'low')
+        }
+        // Restore artifacts and config for "Back to Edit"
+        const arts = JSON.parse(data.artifactsJson || '[]')
+        if (Array.isArray(arts) && arts.length > 0) setArtifacts(arts)
+        const config = JSON.parse(data.configJson || '{}')
+        if (Array.isArray(config.corrections) && config.corrections.length > 0) {
+          setCorrections(config.corrections.join('\n'))
+        }
+        if (typeof config.desiredOutputFormat === 'string') setDesiredOutputFormat(config.desiredOutputFormat)
+        if (typeof config.safetyConstraints === 'string') setSafetyConstraints(config.safetyConstraints)
+        if (Array.isArray(config.allowedTools) && config.allowedTools.length > 0) {
+          setAllowedTools(config.allowedTools.join(', '))
+        }
         setMode(draftMode)
         setStep('review')
       } catch {
