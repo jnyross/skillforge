@@ -776,3 +776,56 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([createdAt])
 }
+
+// =============================================================================
+// Multi-tenant / user entities
+// =============================================================================
+
+model Workspace {
+  id              String     @id @default(uuid())
+  name            String
+  slug            String     @unique
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  users           WorkspaceUser[]
+}
+
+model User {
+  id              String     @id @default(uuid())
+  email           String     @unique
+  displayName     String     @default("")
+  role            String     @default("member") // admin | member | viewer
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  workspaces      WorkspaceUser[]
+}
+
+model WorkspaceUser {
+  id              String     @id @default(uuid())
+  workspaceId     String
+  userId          String
+  role            String     @default("member") // admin | member | viewer
+  createdAt       DateTime   @default(now())
+
+  workspace       Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId])
+  @@index([userId])
+}
+
+model SkillBranch {
+  id              String     @id @default(uuid())
+  skillRepoId     String
+  name            String
+  headVersionId   String?
+  isDefault       Boolean    @default(false)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@unique([skillRepoId, name])
+  @@index([skillRepoId])
+}
