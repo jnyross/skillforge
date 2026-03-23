@@ -17,7 +17,7 @@ export async function POST(
   }
 
   const targetVersion = await prisma.skillVersion.findUnique({
-    where: { id: params.versionId },
+    where: { id: params.versionId, skillRepoId: params.id },
   })
   if (!targetVersion) {
     return NextResponse.json({ error: 'Target version not found' }, { status: 404 })
@@ -38,6 +38,7 @@ export async function POST(
 
   // Get the restored files
   const files = await getFilesAtCommit(repo.gitRepoPath, newCommitSha)
+  const totalLineCount = files.reduce((sum, f) => sum + f.content.split('\n').length, 0)
   const totalContent = files.map(f => f.content).join('\n')
 
   // Create new version record
@@ -49,7 +50,7 @@ export async function POST(
       parentVersionId: latestVersion?.id || null,
       commitMessage: `Restore version ${targetVersion.gitCommitSha.slice(0, 8)}`,
       tokenCount: estimateTokenCount(totalContent),
-      lineCount: countLines(totalContent),
+      lineCount: totalLineCount,
       fileCount: files.length,
     },
   })

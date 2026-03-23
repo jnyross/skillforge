@@ -25,7 +25,8 @@ export async function GET(
     return NextResponse.json({ error: 'Skill repo not found' }, { status: 404 })
   }
 
-  return NextResponse.json(repo)
+  const { gitRepoPath: _gitRepoPath, ...repoDto } = repo
+  return NextResponse.json(repoDto)
 }
 
 /**
@@ -54,7 +55,8 @@ export async function PATCH(
     },
   })
 
-  return NextResponse.json(updated)
+  const { gitRepoPath: _gitRepoPath, ...updatedDto } = updated
+  return NextResponse.json(updatedDto)
 }
 
 /**
@@ -69,11 +71,15 @@ export async function DELETE(
     return NextResponse.json({ error: 'Skill repo not found' }, { status: 404 })
   }
 
-  // Delete git repo
-  await deleteSkillGitRepo(repo.id)
-
-  // Delete from database (cascades to versions and lint results)
+  // Delete from database first (cascades to versions and lint results)
   await prisma.skillRepo.delete({ where: { id: params.id } })
+
+  // Then clean up git repo on disk
+  try {
+    await deleteSkillGitRepo(repo.id)
+  } catch (err) {
+    console.error('Failed to delete git repo from disk:', err)
+  }
 
   return NextResponse.json({ success: true })
 }

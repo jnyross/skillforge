@@ -22,14 +22,21 @@ export async function GET() {
     },
   })
 
-  return NextResponse.json(repos)
+  const reposDto = repos.map(({ gitRepoPath: _g, ...rest }) => rest)
+  return NextResponse.json(reposDto)
 }
 
 /**
  * POST /api/skill-repos — Create a new skill repo
  */
 export async function POST(request: NextRequest) {
-  const body = await request.json()
+  let body: Record<string, unknown>
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+
   const { slug, displayName, description, files } = body as {
     slug: string
     displayName: string
@@ -37,9 +44,16 @@ export async function POST(request: NextRequest) {
     files?: SkillFile[]
   }
 
-  if (!slug || !displayName) {
+  if (!slug || typeof slug !== 'string' || !displayName || typeof displayName !== 'string') {
     return NextResponse.json(
-      { error: 'slug and displayName are required' },
+      { error: 'slug and displayName are required strings' },
+      { status: 400 }
+    )
+  }
+
+  if (files !== undefined && !Array.isArray(files)) {
+    return NextResponse.json(
+      { error: 'files must be an array if provided' },
       { status: 400 }
     )
   }
@@ -62,84 +76,114 @@ export async function POST(request: NextRequest) {
   }
 
   // Create the repo
-  const repo = await prisma.skillRepo.create({
-    data: {
-      slug,
-      displayName,
-      description: description || '',
-      gitRepoPath: '', // Will be set after git init
-    },
-  })
-
-  // Initialize git repo
-  const gitRepoPath = await initSkillGitRepo(repo.id)
-
-  // Update with git path
-  await prisma.skillRepo.update({
-    where: { id: repo.id },
-    data: { gitRepoPath },
-  })
-
-  // If files are provided, create initial version
-  if (files && files.length > 0) {
-    const skillMdFile = files.find(f => f.path === 'SKILL.md')
-    const parsedSkill = skillMdFile ? parseSkillMd(skillMdFile.content) : null
-
-    const commitSha = await createVersion(
-      gitRepoPath,
-      files,
-      'Initial version'
-    )
-
-    const totalContent = files.map(f => f.content).join('\n')
-
-    const version = await prisma.skillVersion.create({
+  let repo
+  try {
+    repo = await prisma.skillRepo.create({
       data: {
-        skillRepoId: repo.id,
-        branchName: 'main',
-        gitCommitSha: commitSha,
-        commitMessage: 'Initial version',
-        tokenCount: estimateTokenCount(totalContent),
-        lineCount: countLines(totalContent),
-        fileCount: files.length,
-        isChampion: true,
+        slug,
+        displayName,
+        description: description || '',
+        gitRepoPath: '', // Will be set after git init
+      },
+    })
+  } catch (err) {
+    // Handle unique constraint violation (race condition on slug)
+    if (
+      err &&
+      typeof err === 'object' &&
+      'code' in err &&
+      (err as { code: string }).code === 'P2002'
+    ) {
+      return NextResponse.json(
+        { error: `A skill repo with slug "${slug}" already exists` },
+        { status: 409 }
+      )
+    }
+    throw err
+  }
+
+  try {
+    // Initialize git repo
+    const gitRepoPath = await initSkillGitRepo(repo.id)
+
+    // Update with git path
+    await prisma.skillRepo.update({
+      where: { id: repo.id },
+      data: { gitRepoPath },
+    })
+
+    // If files are provided, create initial version
+    if (files && files.length > 0) {
+      const skillMdFile = files.find(f => f.path === 'SKILL.md')
+      const parsedSkill = skillMdFile ? parseSkillMd(skillMdFile.content) : null
+
+      const commitSha = await createVersion(
+        gitRepoPath,
+        files,
+        'Initial version'
+      )
+
+      const totalContent = files.map(f => f.content).join('\n')
+
+      const version = await prisma.skillVersion.create({
+        data: {
+          skillRepoId: repo.id,
+          branchName: 'main',
+          gitCommitSha: commitSha,
+          commitMessage: 'Initial version',
+          tokenCount: estimateTokenCount(totalContent),
+          lineCount: countLines(totalContent),
+          fileCount: files.length,
+          isChampion: true,
+        },
+      })
+
+      // Update champion
+      await prisma.skillRepo.update({
+        where: { id: repo.id },
+        data: { currentChampionVersionId: version.id },
+      })
+
+      // Run linting if SKILL.md exists
+      if (parsedSkill) {
+        const lintReport = lintSkill(parsedSkill, files, slug)
+        if (lintReport.issues.length > 0) {
+          await prisma.lintResult.createMany({
+            data: lintReport.issues.map(issue => ({
+              skillRepoId: repo.id,
+              skillVersionId: version.id,
+              severity: issue.severity,
+              category: issue.category,
+              rule: issue.rule,
+              message: issue.message,
+              file: issue.file,
+              line: issue.line,
+              evidence: issue.evidence,
+            })),
+          })
+        }
+      }
+    }
+
+    const createdRepo = await prisma.skillRepo.findUnique({
+      where: { id: repo.id },
+      include: {
+        versions: true,
+        lintResults: true,
       },
     })
 
-    // Update champion
-    await prisma.skillRepo.update({
-      where: { id: repo.id },
-      data: { currentChampionVersionId: version.id },
-    })
-
-    // Run linting if SKILL.md exists
-    if (parsedSkill) {
-      const lintReport = lintSkill(parsedSkill, files, slug)
-      for (const issue of lintReport.issues) {
-        await prisma.lintResult.create({
-          data: {
-            skillRepoId: repo.id,
-            skillVersionId: version.id,
-            severity: issue.severity,
-            category: issue.category,
-            rule: issue.rule,
-            message: issue.message,
-            file: issue.file,
-            line: issue.line,
-            evidence: issue.evidence,
-          },
-        })
-      }
-    }
+    const { gitRepoPath: _g, ...createdRepoDto } = createdRepo!
+    return NextResponse.json(createdRepoDto, { status: 201 })
+  } catch (err) {
+    // Compensation: clean up partially created repo
+    try {
+      const { deleteSkillGitRepo } = await import('@/lib/services/git-storage')
+      await deleteSkillGitRepo(repo.id)
+    } catch { /* ignore cleanup errors */ }
+    try {
+      await prisma.skillRepo.delete({ where: { id: repo.id } })
+    } catch { /* ignore cleanup errors */ }
+    throw err
   }
-
-  const createdRepo = await prisma.skillRepo.findUnique({
-    where: { id: repo.id },
-    include: {
-      versions: true,
-      lintResults: true,
-    },
-  })
-
-  return NextResponse.json(createdRepo, { status: 201 })
 }

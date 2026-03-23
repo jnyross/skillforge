@@ -382,7 +382,7 @@ function generateScorecard(
     if (category === 'safety-control') {
       const hasSafetyFields = skillMd.frontmatter['disable-model-invocation'] !== undefined ||
         skillMd.frontmatter['allowed-tools'] !== undefined
-      if (!hasSafetyFields && rating === 'unknown') {
+      if (!hasSafetyFields && rating !== 'poor') {
         rating = 'fair'
       }
     }

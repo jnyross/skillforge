@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Plus, GitBranch, FileText, Clock, AlertTriangle, CheckCircle } from 'lucide-react'
+import { Plus, GitBranch, FileText, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -52,6 +52,11 @@ export default function HomePage() {
   async function fetchRepos() {
     try {
       const res = await fetch('/api/skill-repos')
+      if (!res.ok) {
+        console.error('Failed to fetch repos:', res.status)
+        setRepos([])
+        return
+      }
       const data = await res.json()
       setRepos(data)
     } catch (err) {

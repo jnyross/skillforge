@@ -1,7 +1,6 @@
 import simpleGit, { SimpleGit } from 'simple-git'
 import fs from 'fs/promises'
 import path from 'path'
-import { v4 as uuidv4 } from 'uuid'
 import { config } from '@/lib/config'
 import type { SkillFile, VersionDiff, FileDiff } from '@/types/skill'
 
@@ -31,10 +30,17 @@ export function getGit(repoPath: string): SimpleGit {
  * Write files to a skill repo working directory.
  */
 export async function writeFiles(repoPath: string, files: SkillFile[]): Promise<void> {
+  const resolvedRepoPath = path.resolve(repoPath)
   for (const file of files) {
-    const filePath = path.join(repoPath, file.path)
-    await fs.mkdir(path.dirname(filePath), { recursive: true })
-    await fs.writeFile(filePath, file.content, 'utf-8')
+    if (path.isAbsolute(file.path)) {
+      throw new Error(`Absolute file paths are not allowed: ${file.path}`)
+    }
+    const target = path.resolve(resolvedRepoPath, file.path)
+    if (!target.startsWith(resolvedRepoPath + path.sep) && target !== resolvedRepoPath) {
+      throw new Error(`Path traversal detected: ${file.path}`)
+    }
+    await fs.mkdir(path.dirname(target), { recursive: true })
+    await fs.writeFile(target, file.content, 'utf-8')
   }
 }
 
@@ -132,8 +138,12 @@ export async function getFilesAtCommit(
         size: Buffer.byteLength(content, 'utf-8'),
       })
     }
-  } catch {
-    // Commit might not exist or be empty
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    // Expected: empty tree or missing commit
+    if (!message.includes('Not a valid object name') && !message.includes('does not exist')) {
+      console.error('Unexpected error reading files at commit:', err)
+    }
   }
 
   return files
@@ -201,13 +211,12 @@ export async function listCommits(
   const git = getGit(repoPath)
 
   try {
-    const log = await git.log({ '--': null, [branchName]: null } as never)
-    return log.all.map(entry => ({
-      sha: entry.hash,
-      message: entry.message,
-      date: entry.date,
-      author: entry.author_name,
-    }))
+    const raw = await git.raw(['log', '--format=%H|%s|%aI|%an', branchName])
+    if (!raw.trim()) return []
+    return raw.trim().split('\n').map(line => {
+      const [sha, message, date, author] = line.split('|')
+      return { sha, message, date, author }
+    })
   } catch {
     return []
   }

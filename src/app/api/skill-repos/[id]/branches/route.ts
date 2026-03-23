@@ -30,7 +30,7 @@ export async function POST(
     return NextResponse.json({ error: 'Skill repo not found' }, { status: 404 })
   }
 
-  const body = await request.json()
+  const body = await request.json().catch(() => ({}))
   const { name, fromVersionId } = body as {
     name: string
     fromVersionId?: string
@@ -43,7 +43,7 @@ export async function POST(
   let fromCommit: string | undefined
   if (fromVersionId) {
     const version = await prisma.skillVersion.findUnique({
-      where: { id: fromVersionId },
+      where: { id: fromVersionId, skillRepoId: params.id },
     })
     if (!version) {
       return NextResponse.json({ error: 'Version not found' }, { status: 404 })

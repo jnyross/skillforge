@@ -6,7 +6,7 @@ import Link from 'next/link'
 import {
   ArrowLeft, GitCommit, FileText, Clock, Plus, RotateCcw,
   AlertTriangle, AlertCircle, Info, CheckCircle, GitBranch,
-  Download, Diff
+  Diff
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -100,6 +100,10 @@ export default function SkillRepoPage() {
     setLoadingVersion(true)
     try {
       const res = await fetch(`/api/skill-repos/${repoId}/versions/${versionId}`)
+      if (!res.ok) {
+        console.error('Failed to load version:', res.status)
+        return
+      }
       const data = await res.json()
       setSelectedVersion(data)
     } catch (err) {
@@ -185,6 +189,10 @@ export default function SkillRepoPage() {
 
     try {
       const res = await fetch(`/api/skill-repos/${repoId}/diff?from=${diffFrom}&to=${diffTo}`)
+      if (!res.ok) {
+        console.error('Failed to compute diff:', res.status)
+        return
+      }
       const data = await res.json()
       setDiffResult(data.diff.files)
     } catch (err) {

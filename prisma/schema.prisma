@@ -18,7 +18,8 @@ model SkillRepo {
   createdAt               DateTime       @default(now())
   updatedAt               DateTime       @updatedAt
 
-  versions                SkillVersion[]
+  currentChampionVersion  SkillVersion?  @relation("ChampionVersion", fields: [currentChampionVersionId], references: [id], onDelete: SetNull)
+  versions                SkillVersion[] @relation("RepoVersions")
   lintResults             LintResult[]
 }
 
@@ -37,13 +38,14 @@ model SkillVersion {
   isChampion      Boolean   @default(false)
   notes           String    @default("")
 
-  skillRepo       SkillRepo @relation(fields: [skillRepoId], references: [id], onDelete: Cascade)
+  skillRepo       SkillRepo @relation("RepoVersions", fields: [skillRepoId], references: [id], onDelete: Cascade)
+  championOfRepo  SkillRepo[] @relation("ChampionVersion")
   parentVersion   SkillVersion? @relation("VersionLineage", fields: [parentVersionId], references: [id])
   childVersions   SkillVersion[] @relation("VersionLineage")
   lintResults     LintResult[]
 
-  @@index([skillRepoId])
-  @@index([branchName])
+  @@index([skillRepoId, createdAt])
+  @@index([skillRepoId, branchName, createdAt])
 }
 
 model LintResult {

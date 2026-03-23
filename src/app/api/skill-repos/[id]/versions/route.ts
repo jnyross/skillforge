@@ -37,7 +37,13 @@ export async function POST(
     return NextResponse.json({ error: 'Skill repo not found' }, { status: 404 })
   }
 
-  const body = await request.json()
+  let body: Record<string, unknown>
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+
   const { files, message, branchName, isChampion, notes } = body as {
     files: SkillFile[]
     message: string
@@ -46,12 +52,12 @@ export async function POST(
     notes?: string
   }
 
-  if (!files || files.length === 0) {
-    return NextResponse.json({ error: 'files are required' }, { status: 400 })
+  if (!Array.isArray(files) || files.length === 0) {
+    return NextResponse.json({ error: 'files must be a non-empty array' }, { status: 400 })
   }
 
-  if (!message) {
-    return NextResponse.json({ error: 'message is required' }, { status: 400 })
+  if (!message || typeof message !== 'string') {
+    return NextResponse.json({ error: 'message is required and must be a string' }, { status: 400 })
   }
 
   const branch = branchName || repo.defaultBranch
@@ -61,6 +67,15 @@ export async function POST(
     where: { skillRepoId: params.id, branchName: branch },
     orderBy: { createdAt: 'desc' },
   })
+
+  // Capture current HEAD for compensation on failure
+  const git = (await import('@/lib/services/git-storage')).getGit(repo.gitRepoPath)
+  let previousHead: string | undefined
+  try {
+    previousHead = (await git.revparse(['HEAD'])).trim()
+  } catch {
+    // No commits yet
+  }
 
   // Create git commit
   const commitSha = await createVersion(
@@ -72,67 +87,74 @@ export async function POST(
 
   const totalContent = files.map(f => f.content).join('\n')
 
-  // Create version record
-  const version = await prisma.skillVersion.create({
-    data: {
-      skillRepoId: params.id,
-      branchName: branch,
-      gitCommitSha: commitSha,
-      parentVersionId: parentVersion?.id || null,
-      commitMessage: message,
-      tokenCount: estimateTokenCount(totalContent),
-      lineCount: countLines(totalContent),
-      fileCount: files.length,
-      isChampion: isChampion || false,
-      notes: notes || '',
-    },
-  })
-
-  // If marked as champion, update repo
-  if (isChampion) {
-    // Unmark previous champion
-    await prisma.skillVersion.updateMany({
-      where: {
+  try {
+    // Create version record
+    const version = await prisma.skillVersion.create({
+      data: {
         skillRepoId: params.id,
-        isChampion: true,
-        id: { not: version.id },
+        branchName: branch,
+        gitCommitSha: commitSha,
+        parentVersionId: parentVersion?.id || null,
+        commitMessage: message,
+        tokenCount: estimateTokenCount(totalContent),
+        lineCount: countLines(totalContent),
+        fileCount: files.length,
+        isChampion: isChampion || false,
+        notes: notes || '',
       },
-      data: { isChampion: false },
     })
 
-    await prisma.skillRepo.update({
-      where: { id: params.id },
-      data: { currentChampionVersionId: version.id },
-    })
-  }
-
-  // Run linting
-  const skillMdFile = files.find(f => f.path === 'SKILL.md')
-  if (skillMdFile) {
-    const parsedSkill = parseSkillMd(skillMdFile.content)
-    const lintReport = lintSkill(parsedSkill, files, repo.slug)
-
-    // Clear old lint results for this version
-    await prisma.lintResult.deleteMany({
-      where: { skillVersionId: version.id },
-    })
-
-    for (const issue of lintReport.issues) {
-      await prisma.lintResult.create({
-        data: {
+    // If marked as champion, update repo
+    if (isChampion) {
+      // Unmark previous champion
+      await prisma.skillVersion.updateMany({
+        where: {
           skillRepoId: params.id,
-          skillVersionId: version.id,
-          severity: issue.severity,
-          category: issue.category,
-          rule: issue.rule,
-          message: issue.message,
-          file: issue.file,
-          line: issue.line,
-          evidence: issue.evidence,
+          isChampion: true,
+          id: { not: version.id },
         },
+        data: { isChampion: false },
+      })
+
+      await prisma.skillRepo.update({
+        where: { id: params.id },
+        data: { currentChampionVersionId: version.id },
       })
     }
-  }
 
-  return NextResponse.json(version, { status: 201 })
+    // Run linting
+    const skillMdFile = files.find(f => f.path === 'SKILL.md')
+    if (skillMdFile) {
+      const parsedSkill = parseSkillMd(skillMdFile.content)
+      const lintReport = lintSkill(parsedSkill, files, repo.slug)
+
+      if (lintReport.issues.length > 0) {
+        await prisma.lintResult.createMany({
+          data: lintReport.issues.map(issue => ({
+            skillRepoId: params.id,
+            skillVersionId: version.id,
+            severity: issue.severity,
+            category: issue.category,
+            rule: issue.rule,
+            message: issue.message,
+            file: issue.file,
+            line: issue.line,
+            evidence: issue.evidence,
+          })),
+        })
+      }
+    }
+
+    return NextResponse.json(version, { status: 201 })
+  } catch (err) {
+    // Compensate: reset git branch to previous HEAD
+    if (previousHead) {
+      try {
+        await git.reset(['--hard', previousHead])
+      } catch (resetErr) {
+        console.error('Failed to reset git HEAD after DB error:', resetErr)
+      }
+    }
+    throw err
+  }
 }

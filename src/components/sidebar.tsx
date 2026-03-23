@@ -45,6 +45,8 @@ export function Sidebar({ activePath }: SidebarProps) {
                   : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
                 item.disabled && 'opacity-40 cursor-not-allowed'
               )}
+              aria-disabled={item.disabled || undefined}
+              tabIndex={item.disabled ? -1 : undefined}
               onClick={(e) => item.disabled && e.preventDefault()}
             >
               <Icon className="h-4 w-4" />

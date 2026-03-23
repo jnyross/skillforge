@@ -11,7 +11,9 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const repo = await prisma.skillRepo.findUnique({ where: { id: params.id } })
+  const id = params.id
+
+  const repo = await prisma.skillRepo.findUnique({ where: { id } })
   if (!repo) {
     return NextResponse.json({ error: 'Skill repo not found' }, { status: 404 })
   }
@@ -22,10 +24,10 @@ export async function POST(
   // Get target version
   let version
   if (versionId) {
-    version = await prisma.skillVersion.findUnique({ where: { id: versionId } })
+    version = await prisma.skillVersion.findUnique({ where: { id: versionId, skillRepoId: id } })
   } else {
     version = await prisma.skillVersion.findFirst({
-      where: { skillRepoId: params.id },
+      where: { skillRepoId: id },
       orderBy: { createdAt: 'desc' },
     })
   }
@@ -40,15 +42,32 @@ export async function POST(
   // Find and parse SKILL.md
   const skillMdFile = files.find(f => f.path === 'SKILL.md')
   if (!skillMdFile) {
+    const missingIssue = {
+      severity: 'error' as const,
+      category: 'spec-correctness',
+      rule: 'skill-md-exists',
+      message: 'SKILL.md file is required but not found',
+      file: 'SKILL.md',
+      evidence: 'No SKILL.md file found',
+    }
+
+    // Persist the missing-SKILL.md lint result
+    await prisma.lintResult.deleteMany({ where: { skillVersionId: version.id } })
+    await prisma.lintResult.create({
+      data: {
+        skillRepoId: id,
+        skillVersionId: version.id,
+        severity: missingIssue.severity,
+        category: missingIssue.category,
+        rule: missingIssue.rule,
+        message: missingIssue.message,
+        file: missingIssue.file,
+        evidence: missingIssue.evidence,
+      },
+    })
+
     return NextResponse.json({
-      issues: [{
-        severity: 'error',
-        category: 'spec-correctness',
-        rule: 'skill-md-exists',
-        message: 'SKILL.md file is required but not found',
-        file: 'SKILL.md',
-        evidence: 'No SKILL.md file found',
-      }],
+      issues: [missingIssue],
       scorecard: [],
       passed: false,
       errorCount: 1,
@@ -65,10 +84,10 @@ export async function POST(
     where: { skillVersionId: version.id },
   })
 
-  for (const issue of lintReport.issues) {
-    await prisma.lintResult.create({
-      data: {
-        skillRepoId: params.id,
+  if (lintReport.issues.length > 0) {
+    await prisma.lintResult.createMany({
+      data: lintReport.issues.map(issue => ({
+        skillRepoId: id,
         skillVersionId: version.id,
         severity: issue.severity,
         category: issue.category,
@@ -77,7 +96,7 @@ export async function POST(
         file: issue.file,
         line: issue.line,
         evidence: issue.evidence,
-      },
+      })),
     })
   }
 
