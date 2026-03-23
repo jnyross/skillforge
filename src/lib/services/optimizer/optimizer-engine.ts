@@ -23,6 +23,7 @@ interface OptimizerConfig {
   candidatesPerRound: number
   mutationModes: MutationMode[]
   objectiveWeights: ObjectiveWeights
+  maxBudgetUsd: number | null
   promotionRules: {
     minImprovement?: number
     allowRegression?: boolean
@@ -100,6 +101,7 @@ export async function handleOptimizerJob(
     candidatesPerRound: 1, // default: one candidate per round for hill climbing
     mutationModes: DEFAULT_MUTATION_MODES,
     objectiveWeights: { ...DEFAULT_WEIGHTS, ...objectiveJson },
+    maxBudgetUsd: run.maxBudgetUsd,
     promotionRules,
     suiteIds,
     trainSuiteIds: suiteIds, // Use all suites for train by default
@@ -165,6 +167,7 @@ async function runOptimizationLoop(
   config: OptimizerConfig
 ): Promise<void> {
   let currentBestVersionId = run.baselineVersionId
+  let accumulatedCostUsd = 0
 
   for (let iteration = 0; iteration < config.maxIterations; iteration++) {
     // Check if stopped
@@ -173,6 +176,11 @@ async function runOptimizationLoop(
       select: { status: true },
     })
     if (currentRun?.status === 'stopped') {
+      break
+    }
+
+    // Check budget limit
+    if (config.maxBudgetUsd && accumulatedCostUsd >= config.maxBudgetUsd) {
       break
     }
 
@@ -215,6 +223,9 @@ async function runOptimizationLoop(
         currentBestVersionId,
         config.trainSuiteIds
       )
+
+      // Accumulate cost for budget tracking
+      accumulatedCostUsd += candidateMetrics.totalCostUsd + baselineMetrics.totalCostUsd
 
       // Score both
       const candidateObjective = computeObjectiveScore(
