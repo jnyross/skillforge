@@ -25,6 +25,8 @@ export async function POST(
     )
   }
 
+  const originalStatus = draft.status
+
   // Update status to generating
   await prisma.wizardDraft.update({
     where: { id: params.id },
@@ -92,10 +94,10 @@ export async function POST(
       generated: result,
     })
   } catch (err) {
-    // Revert status on error
+    // Revert status on error to original state
     await prisma.wizardDraft.update({
       where: { id: params.id },
-      data: { status: 'intake' },
+      data: { status: originalStatus },
     })
 
     return NextResponse.json(
