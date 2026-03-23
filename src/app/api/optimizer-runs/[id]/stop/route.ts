@@ -21,13 +21,21 @@ export async function POST(
     )
   }
 
-  const updated = await prisma.optimizerRun.update({
-    where: { id: params.id },
+  // Use conditional update to avoid TOCTOU race with the optimizer engine
+  const updated = await prisma.optimizerRun.updateMany({
+    where: { id: params.id, status: { in: ['running', 'queued'] } },
     data: {
       status: 'stopped',
       completedAt: new Date(),
     },
   })
+
+  if (updated.count === 0) {
+    return NextResponse.json(
+      { error: 'Run status changed before it could be stopped' },
+      { status: 409 }
+    )
+  }
 
   await logAuditEvent({
     action: 'optimizer_run.stopped',
@@ -36,5 +44,5 @@ export async function POST(
     details: { previousStatus: run.status },
   })
 
-  return NextResponse.json(updated)
+  return NextResponse.json({ id: params.id, status: 'stopped' })
 }
