@@ -32,6 +32,7 @@ model SkillRepo {
   reviewSessions           ReviewSession[]
   benchmarkSnapshots       BenchmarkSnapshot[]
   errorAnalysisSessions    ErrorAnalysisSession[]
+  branches                 SkillBranch[]
 }
 
 model SkillVersion {
@@ -62,6 +63,7 @@ model SkillVersion {
   traces          Trace[]
   candidateVersions OptimizerCandidate[] @relation("CandidateVersion")
   parentCandidates  OptimizerCandidate[] @relation("CandidateParentVersion")
+  branchHeads       SkillBranch[] @relation("BranchHead")
 
   @@index([skillRepoId, createdAt])
   @@index([skillRepoId, branchName, createdAt])
@@ -825,6 +827,9 @@ model SkillBranch {
   isDefault       Boolean    @default(false)
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
+
+  skillRepo       SkillRepo    @relation(fields: [skillRepoId], references: [id], onDelete: Cascade)
+  headVersion     SkillVersion? @relation("BranchHead", fields: [headVersionId], references: [id], onDelete: SetNull)
 
   @@unique([skillRepoId, name])
   @@index([skillRepoId])

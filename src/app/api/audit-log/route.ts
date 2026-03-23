@@ -7,8 +7,8 @@ export async function GET(request: NextRequest) {
   const entityType = searchParams.get('entityType')
   const entityId = searchParams.get('entityId')
   const actor = searchParams.get('actor')
-  const limit = parseInt(searchParams.get('limit') || '50')
-  const offset = parseInt(searchParams.get('offset') || '0')
+  const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '50', 10) || 50, 1), 200)
+  const offset = Math.max(parseInt(searchParams.get('offset') || '0', 10) || 0, 0)
 
   const where: Record<string, unknown> = {}
   if (action) where.action = { contains: action }
