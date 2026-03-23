@@ -56,34 +56,37 @@ export async function POST(
   })
   // This is informational — we don't block promotion but include in the decision
 
-  // Record the promotion decision with human approval
-  await prisma.optimizerDecision.create({
-    data: {
-      optimizerRunId: params.id,
-      candidateId: params.candidateId,
-      decision: 'promote',
-      reason: 'Human-approved promotion to champion',
-      humanApproved: true,
-      metricsJson: candidate.objectiveJson,
-    },
-  })
+  // Promote atomically to avoid inconsistent state
+  await prisma.$transaction(async (tx) => {
+    // Record the promotion decision with human approval
+    await tx.optimizerDecision.create({
+      data: {
+        optimizerRunId: params.id,
+        candidateId: params.candidateId,
+        decision: 'promote',
+        reason: 'Human-approved promotion to champion',
+        humanApproved: true,
+        metricsJson: candidate.objectiveJson,
+      },
+    })
 
-  // Update the skill repo's champion version
-  await prisma.skillRepo.update({
-    where: { id: run.skillRepoId },
-    data: { currentChampionVersionId: candidate.candidateVersionId },
-  })
+    // Unset any existing champion for this repo
+    await tx.skillVersion.updateMany({
+      where: { skillRepoId: run.skillRepoId, isChampion: true },
+      data: { isChampion: false },
+    })
 
-  // Mark candidate version as champion
-  // First, unset any existing champion for this repo
-  await prisma.skillVersion.updateMany({
-    where: { skillRepoId: run.skillRepoId, isChampion: true },
-    data: { isChampion: false },
-  })
+    // Mark candidate version as champion
+    await tx.skillVersion.update({
+      where: { id: candidate.candidateVersionId! },
+      data: { isChampion: true },
+    })
 
-  await prisma.skillVersion.update({
-    where: { id: candidate.candidateVersionId },
-    data: { isChampion: true },
+    // Update the skill repo's champion version
+    await tx.skillRepo.update({
+      where: { id: run.skillRepoId },
+      data: { currentChampionVersionId: candidate.candidateVersionId },
+    })
   })
 
   await logAuditEvent({

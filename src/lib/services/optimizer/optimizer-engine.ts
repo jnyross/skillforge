@@ -434,43 +434,29 @@ async function evaluateCandidate(
       },
     })
 
-    // Start the eval run via the job queue
+    // Run eval directly (not via job queue) to avoid deadlock —
+    // the optimizer itself runs as a job, so enqueuing eval-run jobs
+    // would never be processed while the optimizer job holds the lock.
     try {
-      const { startEvalRun } = await import('../eval/eval-runner')
-      await startEvalRun(evalRun.id)
+      const { handleEvalRunJob } = await import('../eval/eval-runner')
+      await handleEvalRunJob({ evalRunId: evalRun.id })
     } catch {
-      // If eval run fails to start, continue with default metrics
+      // If eval run fails, continue with default metrics
     }
 
     runs.push(evalRun)
   }
 
-  // Wait for runs to complete (with timeout)
-  const maxWaitMs = 60000 // 60 seconds
-  const startTime = Date.now()
+  // Re-read run results (handleEvalRunJob completes synchronously)
+  const completedRuns = await prisma.evalRun.findMany({
+    where: { id: { in: runs.map(r => r.id) }, status: 'completed' },
+    select: { metricsJson: true },
+  })
 
-  while (Date.now() - startTime < maxWaitMs) {
-    const runStatuses = await prisma.evalRun.findMany({
-      where: { id: { in: runs.map(r => r.id) } },
-      select: { status: true, metricsJson: true },
-    })
-
-    const allDone = runStatuses.every(
-      r => r.status === 'completed' || r.status === 'failed' || r.status === 'cancelled'
-    )
-
-    if (allDone) {
-      const completedMetrics = runStatuses
-        .filter(r => r.status === 'completed')
-        .map(r => JSON.parse(r.metricsJson || '{}'))
-      return completedMetrics.length > 0 ? aggregateMetrics(completedMetrics) : defaultMetrics()
-    }
-
-    // Wait 1 second before checking again
-    await new Promise(resolve => setTimeout(resolve, 1000))
+  if (completedRuns.length > 0) {
+    return aggregateMetrics(completedRuns.map(r => JSON.parse(r.metricsJson || '{}')))
   }
 
-  // Timeout — return what we have
   return defaultMetrics()
 }
 
