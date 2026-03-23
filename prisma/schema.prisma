@@ -601,7 +601,9 @@ model LogChunk {
 model WizardDraft {
   id              String     @id @default(uuid())
   intent          String     @default("")
+  mode            String     @default("scratch") // extract | synthesize | hybrid | scratch
   artifactsJson   String     @default("[]")
+  configJson      String     @default("{}") // corrections, desiredOutputFormat, safetyConstraints, allowedTools
   status          String     @default("intake") // intake | generating | review | saved | abandoned
   generatedSkill  String     @default("")
   generatedEvals  String     @default("{}")

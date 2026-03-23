@@ -10,12 +10,20 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
-  const { intent, artifactsJson } = body
+  const { intent, artifactsJson, mode, corrections, desiredOutputFormat, safetyConstraints, allowedTools } = body
+
+  const configJson: Record<string, unknown> = {}
+  if (corrections && Array.isArray(corrections) && corrections.length > 0) configJson.corrections = corrections
+  if (desiredOutputFormat) configJson.desiredOutputFormat = desiredOutputFormat
+  if (safetyConstraints) configJson.safetyConstraints = safetyConstraints
+  if (allowedTools && Array.isArray(allowedTools) && allowedTools.length > 0) configJson.allowedTools = allowedTools
 
   const draft = await prisma.wizardDraft.create({
     data: {
       intent: intent || '',
+      mode: mode || 'scratch',
       artifactsJson: artifactsJson ? JSON.stringify(artifactsJson) : '[]',
+      configJson: JSON.stringify(configJson),
       status: 'intake',
     },
   })
