@@ -32,23 +32,25 @@ export async function POST(request: NextRequest) {
   const executor = createExecutor(type)
   const health = await executor.healthCheck()
 
-  // If setting as default, unset other defaults
-  if (isDefault) {
-    await prisma.executorConfig.updateMany({
-      where: { isDefault: true },
-      data: { isDefault: false },
-    })
-  }
-
   try {
-    const config = await prisma.executorConfig.create({
-      data: {
-        name,
-        type,
-        isDefault: isDefault || false,
-        configJson: configJson ? JSON.stringify(configJson) : '{}',
-        lastHealthCheck: health.ok ? new Date() : null,
-      },
+    const config = await prisma.$transaction(async (tx) => {
+      // If setting as default, unset other defaults atomically
+      if (isDefault) {
+        await tx.executorConfig.updateMany({
+          where: { isDefault: true },
+          data: { isDefault: false },
+        })
+      }
+
+      return tx.executorConfig.create({
+        data: {
+          name,
+          type,
+          isDefault: isDefault || false,
+          configJson: configJson ? JSON.stringify(configJson) : '{}',
+          lastHealthCheck: health.ok ? new Date() : null,
+        },
+      })
     })
 
     return NextResponse.json({ ...config, health }, { status: 201 })

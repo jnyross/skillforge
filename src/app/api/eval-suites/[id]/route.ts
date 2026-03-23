@@ -41,9 +41,9 @@ export async function PATCH(
     return NextResponse.json({ error: 'Suite not found' }, { status: 404 })
   }
 
-  if (suite.frozen && !body.frozen) {
+  if (suite.frozen && body.frozen !== false) {
     return NextResponse.json(
-      { error: 'Cannot modify a frozen suite' },
+      { error: 'Cannot modify a frozen suite. Set frozen=false to unfreeze first.' },
       { status: 400 }
     )
   }

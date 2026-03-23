@@ -36,6 +36,14 @@ export async function PATCH(
   const body = await request.json()
   const { status } = body
 
+  const validStatuses = ['queued', 'running', 'completed', 'stopped', 'failed']
+  if (status !== undefined && !validStatuses.includes(status)) {
+    return NextResponse.json(
+      { error: `status must be one of: ${validStatuses.join(', ')}` },
+      { status: 400 }
+    )
+  }
+
   const run = await prisma.optimizerRun.findUnique({ where: { id: params.id } })
   if (!run) {
     return NextResponse.json({ error: 'Run not found' }, { status: 404 })

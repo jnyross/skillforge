@@ -37,6 +37,14 @@ export async function PATCH(
   const body = await request.json()
   const { status } = body
 
+  const validStatuses = ['queued', 'running', 'completed', 'failed', 'cancelled']
+  if (status !== undefined && !validStatuses.includes(status)) {
+    return NextResponse.json(
+      { error: `status must be one of: ${validStatuses.join(', ')}` },
+      { status: 400 }
+    )
+  }
+
   if (status === 'cancelled') {
     const run = await prisma.evalRun.findUnique({ where: { id: params.id } })
     if (!run) {

@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
       model: model || 'claude-sonnet-4-20250514',
       effort: effort || 'medium',
       permissionMode: permissionMode || 'default',
-      maxTurns: maxTurns || 10,
+      maxTurns: maxTurns ?? 10,
       status: 'queued',
     },
   })
