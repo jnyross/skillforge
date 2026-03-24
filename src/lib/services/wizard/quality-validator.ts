@@ -29,7 +29,6 @@ export interface QualityIssue {
  */
 export function validateSkillQuality(skillMd: string, intent: string): QualityCheck {
   const issues: QualityIssue[] = []
-  const lines = skillMd.split('\n')
 
   // ── Check 1: No boilerplate phrases ──────────────────────────────────────
   for (const phrase of FORBIDDEN_PHRASES) {
