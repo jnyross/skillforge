@@ -5,11 +5,13 @@ import { usePathname } from 'next/navigation'
 import {
   FolderGit2, FlaskConical, Users, Scale, Zap, Wand2,
   Settings, Activity, LayoutDashboard, Shield, SearchSlash, Database, ScrollText,
+  MessageSquarePlus,
 } from 'lucide-react'
 
 const navItems = [
   { href: '/', label: 'Repositories', icon: FolderGit2 },
   { href: '/evals', label: 'Evals', icon: FlaskConical },
+  { href: '/eval-builder', label: 'Eval Builder', icon: MessageSquarePlus },
   { href: '/traces', label: 'Trace Lab', icon: Activity },
   { href: '/reviews', label: 'Review Arena', icon: Users },
   { href: '/judges', label: 'Judges', icon: Scale },

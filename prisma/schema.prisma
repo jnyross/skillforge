@@ -33,6 +33,7 @@ model SkillRepo {
   benchmarkSnapshots       BenchmarkSnapshot[]
   errorAnalysisSessions    ErrorAnalysisSession[]
   branches                 SkillBranch[]
+  evalBuilderSessions      EvalBuilderSession[]
 }
 
 model SkillVersion {
@@ -729,6 +730,43 @@ model SyntheticTuple {
   config          SyntheticDataConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
 
   @@index([configId])
+}
+
+// =============================================================================
+// Eval Builder (AI-guided conversation) entities
+// =============================================================================
+
+model EvalBuilderSession {
+  id              String     @id @default(uuid())
+  skillRepoId     String?
+  title           String     @default("")
+  phase           String     @default("understanding") // understanding | corpus | analysis | generation | refinement | committed
+  status          String     @default("active") // active | committed | abandoned
+  corpusText      String     @default("") // user-provided knowledge corpus
+  analysisJson    String     @default("{}") // AI-extracted behaviors, edge cases, failure modes
+  proposedCasesJson String   @default("[]") // AI-proposed test cases
+  committedSuiteIds String   @default("") // comma-separated suite IDs after commit
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  skillRepo       SkillRepo? @relation(fields: [skillRepoId], references: [id], onDelete: SetNull)
+  messages        EvalBuilderMessage[]
+
+  @@index([status])
+}
+
+model EvalBuilderMessage {
+  id              String     @id @default(uuid())
+  sessionId       String
+  role            String     // user | assistant | system
+  content         String
+  metadata        String     @default("{}") // JSON: proposed cases, actions taken, etc.
+  createdAt       DateTime   @default(now())
+
+  session         EvalBuilderSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([sessionId, createdAt])
 }
 
 // =============================================================================
