@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
         purpose: purpose || '',
         scope: scope || '',
         targetCriterion: targetCriterion || '',
-        model: model || 'claude-sonnet-4-20250514',
+        model: model || 'claude-opus-4-6',
         outputSchema: outputSchema ? JSON.stringify(outputSchema) : '{}',
         promptVersions: (systemPrompt || userPromptTemplate) ? {
           create: {

@@ -266,7 +266,7 @@ export default function WizardPage() {
           skillRepoId: saveResult.repo.id,
           skillVersionId: saveResult.version.id,
           suiteId: suite.id,
-          executorType: 'mock',
+          executorType: 'claude-cli',
           splitFilter: 'train',
         }),
       })
@@ -276,10 +276,10 @@ export default function WizardPage() {
       // Start the run
       await fetch(`/api/eval-runs/${run.id}/start`, { method: 'POST' })
 
-      // Poll for completion (max 60s)
+      // Poll for completion (max 3 min for real Claude CLI calls)
       let status = 'running'
       let passRate: number | undefined
-      for (let i = 0; i < 30; i++) {
+      for (let i = 0; i < 90; i++) {
         await new Promise(resolve => setTimeout(resolve, 2000))
         const pollRes = await fetch(`/api/eval-runs/${run.id}`)
         if (!pollRes.ok) break
@@ -1066,7 +1066,7 @@ export default function WizardPage() {
               <div>
                 <h3 className="font-medium text-sm">Smoke Eval Run</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Auto-run the first eval suite with mock executor to verify eval pipeline works
+                  Auto-run the first eval suite with Claude CLI to verify eval pipeline works
                 </p>
               </div>
               {!smokeResult && (

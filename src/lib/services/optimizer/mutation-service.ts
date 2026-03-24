@@ -96,7 +96,7 @@ export async function generateMutation(request: MutationRequest): Promise<Mutati
     const userPrompt = buildUserPrompt(request)
 
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-opus-4-6',
       max_tokens: 4096,
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],

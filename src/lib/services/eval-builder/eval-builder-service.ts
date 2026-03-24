@@ -166,7 +166,7 @@ export async function processMessage(
     if (apiKey) {
       const client = new Anthropic({ apiKey })
       const response = await client.messages.create({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-opus-4-6',
         max_tokens: 4096,
         system: fullSystemPrompt,
         messages,

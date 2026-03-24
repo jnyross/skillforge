@@ -21,7 +21,7 @@ export default function JudgesPage() {
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
   const [form, setForm] = useState({
-    name: '', purpose: '', scope: '', targetCriterion: '', model: 'claude-sonnet-4-20250514',
+    name: '', purpose: '', scope: '', targetCriterion: '', model: 'claude-opus-4-6',
     systemPrompt: '', userPromptTemplate: '',
   })
   const [creating, setCreating] = useState(false)
@@ -47,7 +47,7 @@ export default function JudgesPage() {
       body: JSON.stringify(form),
     })
     if (res.ok) {
-      setForm({ name: '', purpose: '', scope: '', targetCriterion: '', model: 'claude-sonnet-4-20250514', systemPrompt: '', userPromptTemplate: '' })
+      setForm({ name: '', purpose: '', scope: '', targetCriterion: '', model: 'claude-opus-4-6', systemPrompt: '', userPromptTemplate: '' })
       setShowCreate(false)
       loadJudges()
     } else {

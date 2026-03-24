@@ -190,7 +190,7 @@ model EvalRun {
   suiteId           String
   executorType      String     @default("claude-cli") // claude-cli | mock
   claudeVersion     String     @default("")
-  model             String     @default("claude-sonnet-4-20250514")
+  model             String     @default("claude-opus-4-6")
   effort            String     @default("medium")
   permissionMode    String     @default("default")
   maxTurns          Int        @default(10)
@@ -375,7 +375,7 @@ model JudgeDefinition {
   purpose             String     @default("")
   scope               String     @default("")
   targetCriterion     String     @default("")
-  model               String     @default("claude-sonnet-4-20250514")
+  model               String     @default("claude-opus-4-6")
   outputSchema        String     @default("{}")
   status              String     @default("draft") // draft | candidate | calibrated | deprecated
   calibrationDatasetVersion String?

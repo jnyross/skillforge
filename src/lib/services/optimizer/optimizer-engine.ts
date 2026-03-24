@@ -464,7 +464,7 @@ async function evaluateCandidate(
         skillRepoId,
         skillVersionId: versionId,
         suiteId,
-        executorType: 'mock',
+        executorType: 'claude-cli',
         status: 'queued',
       },
     })
