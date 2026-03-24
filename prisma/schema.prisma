@@ -210,6 +210,7 @@ model EvalRun {
   caseRuns          EvalCaseRun[]
   benchmarkSnapshots BenchmarkSnapshot[]
   traces            Trace[]
+  blindComparisons  BlindComparison[]
 
   @@index([skillRepoId])
   @@index([skillVersionId])
@@ -233,6 +234,7 @@ model EvalCaseRun {
   traceId         String?
   evalFeedbackJson String    @default("{}") // Combined eval feedback from semantic grading
   allClaimsJson   String     @default("[]") // All claims extracted across all semantic assertions
+  baselineOutputJson String  @default("{}") // Baseline (no-skill) output for comparison
   createdAt       DateTime   @default(now())
 
   evalRun         EvalRun    @relation(fields: [evalRunId], references: [id], onDelete: Cascade)
@@ -240,6 +242,7 @@ model EvalCaseRun {
   skillVersion    SkillVersion @relation(fields: [skillVersionId], references: [id])
   assertions      AssertionResult[]
   trace           Trace?     @relation("CaseRunTrace", fields: [traceId], references: [id])
+  blindComparisons BlindComparison[]
 
   @@index([evalRunId])
   @@index([evalCaseId])
@@ -809,6 +812,32 @@ model ExecutorConfig {
   lastHealthCheck DateTime?
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
+}
+
+// =============================================================================
+// Blind Comparison entities (PR 4)
+// =============================================================================
+
+model BlindComparison {
+  id                String     @id @default(uuid())
+  evalCaseRunId     String
+  evalRunId         String
+  winner            String     // skill | baseline | TIE
+  skillIsA          Boolean    // true if skill output was randomly labeled A
+  delta             Float      @default(0) // skill_score - baseline_score
+  reasoningText     String     @default("") // Why the winner was chosen
+  rubricJson        String     @default("{}") // Full rubric scores for A and B
+  outputQualityJson String     @default("{}") // Strengths/weaknesses for each
+  expectationResultsJson String @default("{}") // Assertion pass rates per output
+  skillScore        Float      @default(0) // Unblinded skill overall score (1-10)
+  baselineScore     Float      @default(0) // Unblinded baseline overall score (1-10)
+  createdAt         DateTime   @default(now())
+
+  evalCaseRun       EvalCaseRun @relation(fields: [evalCaseRunId], references: [id], onDelete: Cascade)
+  evalRun           EvalRun     @relation(fields: [evalRunId], references: [id], onDelete: Cascade)
+
+  @@index([evalCaseRunId])
+  @@index([evalRunId])
 }
 
 model AuditLog {
