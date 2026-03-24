@@ -412,8 +412,31 @@ async function executeOutputCase(
     // Parse assertions from case config
     const caseConfig = JSON.parse(evalCase.configJson || '{}') as {
       assertions?: AssertionDefinition[]
+      semanticAssertions?: Array<{
+        type: string
+        description: string
+        criterion: string
+        dimension: string
+        discriminating_note?: string
+      }>
     }
     const assertions = caseConfig.assertions ?? []
+
+    // PR 3: Add semantic assertions from config
+    if (caseConfig.semanticAssertions && caseConfig.semanticAssertions.length > 0) {
+      for (const sa of caseConfig.semanticAssertions) {
+        assertions.push({
+          type: 'semantic',
+          options: {
+            description: sa.description,
+            criterion: sa.criterion,
+            dimension: sa.dimension,
+            discriminating_note: sa.discriminating_note,
+            prompt: evalCase.prompt,
+          },
+        })
+      }
+    }
 
     // If no explicit assertions but there's an expected outcome, add a contains check
     if (assertions.length === 0 && evalCase.expectedOutcome) {
@@ -467,8 +490,29 @@ async function executeOutputCase(
       },
     })
 
-    // Store individual assertion results
+    // Store individual assertion results (with semantic grading fields)
     for (const ar of assertionResults.results) {
+      // Parse semantic grading data from evidence if it's a semantic assertion
+      let semanticEvidence = ''
+      let semanticReasoning = ''
+      let semanticConfidence: number | null = null
+      let semanticDimension = ''
+      let claimsJson = '[]'
+      let evalFeedbackJson = '{}'
+
+      if (ar.type === 'semantic') {
+        // Extract structured data from the evidence string
+        const evidenceMatch = ar.evidence.match(/Evidence: (.+?)(?:\n|$)/)
+        const reasoningMatch = ar.evidence.match(/Reasoning: (.+?)(?:\n|$)/)
+        const confidenceMatch = ar.evidence.match(/confidence: (\d+)%/)
+        const dimensionMatch = ar.evidence.match(/^\[([A-Z]+)\]/)
+
+        semanticEvidence = evidenceMatch ? evidenceMatch[1] : ar.evidence
+        semanticReasoning = reasoningMatch ? reasoningMatch[1] : ''
+        semanticConfidence = confidenceMatch ? parseInt(confidenceMatch[1]) / 100 : null
+        semanticDimension = dimensionMatch ? dimensionMatch[1].toLowerCase() : ''
+      }
+
       await prisma.assertionResult.create({
         data: {
           evalCaseRunId: caseRun.id,
@@ -479,6 +523,12 @@ async function executeOutputCase(
           actual: ar.actual != null ? String(ar.actual) : '',
           message: ar.evidence,
           durationMs: ar.durationMs,
+          evidence: semanticEvidence,
+          reasoning: semanticReasoning,
+          confidence: semanticConfidence,
+          dimension: semanticDimension,
+          claimsJson,
+          evalFeedbackJson,
         },
       })
     }

@@ -64,6 +64,13 @@ export interface GeneratedEvalCase {
   expectedOutcome?: string
   assertionType?: string
   assertionValue?: string
+  semanticAssertions?: Array<{
+    type: 'semantic'
+    description: string
+    criterion: string
+    dimension: 'structure' | 'content' | 'quality' | 'format'
+    discriminating_note?: string
+  }>
   tags?: string[]
   split: 'train' | 'validation' | 'holdout'
 }
@@ -257,11 +264,18 @@ Respond with a JSON object containing:
     "cases": [
       {
         "key": "output-1",
-        "name": "Test [scenario]",
-        "prompt": "the prompt to test",
+        "name": "Test [scenario] — give this a REALISTIC name like a real user would phrase it",
+        "prompt": "A realistic prompt with personality, backstory, and casual language — NOT a sterile test prompt. Example: 'Hey, I need a haiku about debugging a race condition in Go. Make it feel contemplative.'",
         "expectedOutcome": "what good output looks like",
-        "assertionType": "contains",
-        "assertionValue": "key text that must appear",
+        "assertions": [
+          {
+            "type": "semantic",
+            "description": "What to check, in natural language",
+            "criterion": "Specific pass/fail boundary — e.g. 'Output follows 5-7-5 syllable structure with no more than one syllable deviation per line'",
+            "dimension": "structure | content | quality | format",
+            "discriminating_note": "Why this matters and what a FALSE POSITIVE looks like — e.g. 'A limerick would also have line structure but wrong syllable count'"
+          }
+        ],
         "split": "train"
       }
     ]
@@ -273,7 +287,12 @@ Respond with a JSON object containing:
 Requirements:
 - SKILL.md must have valid YAML frontmatter with at least name and description
 - Generate at least 3 trigger cases (mix of should-trigger and should-not-trigger)
-- Generate at least 2 output/workflow cases
+- Generate 3-5 FOCUSED output cases (not 8+ padded ones)
+- Each output case MUST have realistic prompts with personality, backstory, and casual language
+- Each output case MUST use semantic assertions with clear pass/fail criteria
+- Each case MUST have multi-dimensional assertions covering at least 2 of: structure, content, quality, format
+- Each assertion MUST have a discriminating_note explaining what a false positive looks like
+- NO trivial assertions — every assertion must be hard to satisfy without genuinely doing the work
 - Assign splits: 60% train, 20% validation, 20% holdout
 - Include at least one warning if the skill was generated from scratch without artifacts
 - Respond ONLY with valid JSON`
@@ -308,6 +327,13 @@ function parseGenerationResponse(text: string, input: WizardInput): GeneratedSki
             expectedOutcome?: string
             assertionType?: string
             assertionValue?: string
+            assertions?: Array<{
+              type?: string
+              description?: string
+              criterion?: string
+              dimension?: string
+              discriminating_note?: string
+            }>
             split?: string
           }>
         }
@@ -339,8 +365,15 @@ function parseGenerationResponse(text: string, input: WizardInput): GeneratedSki
             name: c.name || `Output case ${i + 1}`,
             prompt: c.prompt || '',
             expectedOutcome: c.expectedOutcome,
-            assertionType: c.assertionType || 'contains',
+            assertionType: c.assertions && c.assertions.length > 0 ? 'semantic' : (c.assertionType || 'contains'),
             assertionValue: c.assertionValue,
+            semanticAssertions: c.assertions?.filter(a => a.type === 'semantic').map(a => ({
+              type: 'semantic' as const,
+              description: a.description || '',
+              criterion: a.criterion || '',
+              dimension: (a.dimension || 'quality') as 'structure' | 'content' | 'quality' | 'format',
+              discriminating_note: a.discriminating_note,
+            })),
             split: (c.split as 'train' | 'validation' | 'holdout') || 'train',
           })),
         },
@@ -368,9 +401,9 @@ description: ${JSON.stringify(input.intent.slice(0, 200))}
 
 Based on the user's intent: "${input.intent}"
 
-1. Analyze the request
-2. Execute the task
-3. Verify the output
+1. Understand the user's specific requirements
+2. Plan the approach and carry it out step by step
+3. Check the output meets all stated requirements
 
 ## Gotchas
 - This is an auto-generated skill. Review and refine before production use.
