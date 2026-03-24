@@ -451,7 +451,7 @@ description: ${JSON.stringify(input.intent.slice(0, 200))}
 Based on the user's intent: "${input.intent}"
 
 1. Understand the user's specific requirements
-2. Plan and implement the solution step by step
+2. Plan the approach and carry it out step by step
 3. Check the output meets all stated requirements
 
 ## Gotchas
