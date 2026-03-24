@@ -321,10 +321,17 @@ ${context.extractedAnswers.map(a => `- ${a.questionKey}: ${a.answer}`).join('\n'
 
 IMPORTANT: Respond ONLY with valid JSON. No markdown, no extra text.`
 
-  const conversationMessages = context.messages.map(m => ({
-    role: m.role as 'user' | 'assistant',
-    content: m.content,
-  }))
+  // Filter out leading assistant messages — Anthropic API requires first message to be 'user' role.
+  // The greeting is always pushed as an assistant message before the first user message.
+  const conversationMessages = context.messages
+    .map(m => ({
+      role: m.role as 'user' | 'assistant',
+      content: m.content,
+    }))
+    .reduce<Array<{role: 'user' | 'assistant'; content: string}>>((acc, msg) => {
+      if (acc.length === 0 && msg.role === 'assistant') return acc
+      return [...acc, msg]
+    }, [])
 
   try {
     const response = await client.messages.create({

@@ -12,7 +12,16 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const { intent, artifactsJson, mode, corrections, desiredOutputFormat, safetyConstraints, allowedTools, concreteExamples, freedomLevel, interviewTranscript, extractedAnswersJson, interviewContextJson } = body
 
-  const configJson: Record<string, unknown> = {}
+  // Accept configJson directly from the body (interview flow sends it as a string),
+  // or build it from individual fields (form flow sends them separately)
+  let configJson: Record<string, unknown> = {}
+  const bodyConfigJson = body.configJson
+  if (typeof bodyConfigJson === 'string' && bodyConfigJson.trim()) {
+    try { configJson = JSON.parse(bodyConfigJson) } catch { /* ignore */ }
+  } else if (bodyConfigJson && typeof bodyConfigJson === 'object') {
+    configJson = bodyConfigJson
+  }
+  // Overlay individual fields on top (form flow)
   if (corrections && Array.isArray(corrections) && corrections.length > 0) configJson.corrections = corrections
   if (desiredOutputFormat) configJson.desiredOutputFormat = desiredOutputFormat
   if (safetyConstraints) configJson.safetyConstraints = safetyConstraints

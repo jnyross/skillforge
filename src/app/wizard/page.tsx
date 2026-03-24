@@ -482,6 +482,13 @@ export default function WizardPage() {
         if (Array.isArray(config.allowedTools) && config.allowedTools.length > 0) {
           setAllowedTools(config.allowedTools.join(', '))
         }
+        // Restore interview context for "Back to Edit"
+        if (data.interviewContextJson && data.interviewContextJson.trim()) {
+          try {
+            const ctx = JSON.parse(data.interviewContextJson)
+            setInterviewContext(ctx)
+          } catch { /* ignore invalid JSON */ }
+        }
         setMode(draftMode)
         setStep('review')
       } catch {
@@ -511,6 +518,13 @@ export default function WizardPage() {
         } catch { /* ignore */ }
         if (typeof data.freedomLevel === 'string' && data.freedomLevel) {
           setFreedomLevel(data.freedomLevel as 'high' | 'medium' | 'low')
+        }
+        // Restore interview context for resume
+        if (data.interviewContextJson && data.interviewContextJson.trim()) {
+          try {
+            const ctx = JSON.parse(data.interviewContextJson)
+            setInterviewContext(ctx)
+          } catch { /* ignore invalid JSON */ }
         }
       } catch {
         // ignore — proceed with just intent and mode
