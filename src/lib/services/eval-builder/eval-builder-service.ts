@@ -118,8 +118,8 @@ export async function processMessage(
 
   if (!session) throw new Error('Session not found')
 
-  // Save user message
-  await prisma.evalBuilderMessage.create({
+  // Save user message (store ID so we can clean up on API failure)
+  const savedUserMsg = await prisma.evalBuilderMessage.create({
     data: {
       sessionId,
       role: 'user',
@@ -158,22 +158,28 @@ export async function processMessage(
   // Prepend context to the system prompt
   const fullSystemPrompt = SYSTEM_PROMPT + (contextPrefix ? `\n\nCURRENT SESSION CONTEXT:\n${contextPrefix}` : '')
 
-  // Call Claude API
+  // Call Claude API (delete orphaned user message on failure to prevent corrupted history)
   const apiKey = process.env.ANTHROPIC_API_KEY
   let responseText: string
 
-  if (apiKey) {
-    const client = new Anthropic({ apiKey })
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 4096,
-      system: fullSystemPrompt,
-      messages,
-    })
-    responseText = response.content[0].type === 'text' ? response.content[0].text : ''
-  } else {
-    // Mock response for development without API key
-    responseText = getMockResponse(session.phase, userMessage, existingCases)
+  try {
+    if (apiKey) {
+      const client = new Anthropic({ apiKey })
+      const response = await client.messages.create({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4096,
+        system: fullSystemPrompt,
+        messages,
+      })
+      responseText = response.content[0].type === 'text' ? response.content[0].text : ''
+    } else {
+      // Mock response for development without API key
+      responseText = getMockResponse(session.phase, userMessage, existingCases)
+    }
+  } catch (err) {
+    // Clean up the orphaned user message to prevent consecutive user messages
+    await prisma.evalBuilderMessage.delete({ where: { id: savedUserMsg.id } })
+    throw err
   }
 
   // Parse structured data from response
@@ -395,7 +401,7 @@ export async function updateCaseStatus(
   } else if (action === 'reject') {
     cases[idx].status = 'rejected'
   } else if (action === 'edit' && edits) {
-    cases[idx] = { ...cases[idx], ...edits, status: 'edited' }
+    cases[idx] = { ...cases[idx], ...edits, id: cases[idx].id, status: 'edited' }
   }
 
   await prisma.evalBuilderSession.update({
