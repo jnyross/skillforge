@@ -72,7 +72,7 @@ export default function EvalSuiteDetailPage() {
 
   // Run form
   const [showRunForm, setShowRunForm] = useState(false)
-  const [runForm, setRunForm] = useState({ versionId: '', executorType: 'claude-cli', model: 'claude-sonnet-4-20250514', splitFilter: 'all' })
+  const [runForm, setRunForm] = useState({ versionId: '', executorType: 'claude-cli', model: 'claude-opus-4-6', splitFilter: 'all' })
 
   const loadSuite = useCallback(async () => {
     const res = await fetch(`/api/eval-suites/${suiteId}`)
@@ -244,9 +244,9 @@ export default function EvalSuiteDetailPage() {
                 onChange={e => setRunForm(f => ({ ...f, model: e.target.value }))}
                 className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm"
               >
+                <option value="claude-opus-4-6">Claude Opus 4.6</option>
+                <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
                 <option value="claude-sonnet-4-20250514">Claude Sonnet 4</option>
-                <option value="claude-opus-4-20250514">Claude Opus 4</option>
-                <option value="claude-haiku-35-20241022">Claude Haiku 3.5</option>
               </select>
             </div>
           </div>

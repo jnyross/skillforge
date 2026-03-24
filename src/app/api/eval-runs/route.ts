@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
       baselineVersionId: baselineVersionId || null,
       suiteId,
       executorType: executorType || 'claude-cli',
-      model: model || 'claude-sonnet-4-20250514',
+      model: model || 'claude-opus-4-6',
       effort: effort || 'medium',
       permissionMode: permissionMode || 'default',
       maxTurns: maxTurns ?? 10,
