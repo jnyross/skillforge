@@ -20,6 +20,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Sidebar } from '@/components/sidebar'
+import { useTechLevel, toTitleCase } from '@/lib/context/tech-level-context'
 
 interface VersionTagItem {
   id: string
@@ -76,6 +77,7 @@ export default function SkillRepoPage() {
   const params = useParams()
   const router = useRouter()
   const repoId = params.id as string
+  const { terms } = useTechLevel()
 
   const [repo, setRepo] = useState<{
     id: string
@@ -704,7 +706,7 @@ export default function SkillRepoPage() {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
                     <GitCommit className="h-4 w-4" />
-                    Versions ({repo.versions.length})
+                    {toTitleCase(terms.skillVersion)}s ({repo.versions.length})
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -788,7 +790,7 @@ export default function SkillRepoPage() {
                     <div className="space-y-4">
                       <Card>
                         <CardHeader className="pb-3">
-                          <CardTitle className="text-base">Version Info</CardTitle>
+                          <CardTitle className="text-base">{toTitleCase(terms.skillVersion)} Info</CardTitle>
                         </CardHeader>
                         <CardContent>
                           <div className="grid grid-cols-2 gap-4">

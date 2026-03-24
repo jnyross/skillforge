@@ -8,6 +8,7 @@ import {
   Loader2, Activity, BarChart3, RotateCcw, ArrowUpRight, Scale,
   Eye, ThumbsUp, ThumbsDown, AlertTriangle, ChevronDown, ChevronUp,
 } from 'lucide-react'
+import { useTechLevel, toTitleCase } from '@/lib/context/tech-level-context'
 
 interface EvalRunDetail {
   id: string
@@ -86,6 +87,7 @@ interface TraceItem {
 export default function EvalRunDetailPage() {
   const params = useParams()
   const runId = params.id as string
+  const { terms } = useTechLevel()
 
   const [run, setRun] = useState<EvalRunDetail | null>(null)
   const [traces, setTraces] = useState<TraceItem[]>([])
@@ -242,7 +244,7 @@ export default function EvalRunDetailPage() {
         <div className="flex gap-6 border border-border rounded-lg p-4">
           <div className="text-center">
             <p className="text-2xl font-bold">{(benchmark.passRate * 100).toFixed(1)}%</p>
-            <p className="text-xs text-muted-foreground">Pass Rate</p>
+            <p className="text-xs text-muted-foreground">{toTitleCase(terms.passRate)}</p>
           </div>
           <div className="text-center">
             <p className="text-2xl font-bold text-green-400">{benchmark.passedCases}</p>
@@ -268,7 +270,7 @@ export default function EvalRunDetailPage() {
       {/* Tabs */}
       <div className="flex gap-4 border-b border-border">
         <button onClick={() => setTab('results')} className={`pb-2 text-sm font-medium border-b-2 ${tab === 'results' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
-          Case Results ({run.caseRuns.length})
+          {toTitleCase(terms.evalCase)} Results ({run.caseRuns.length})
         </button>
         <button onClick={() => setTab('metrics')} className={`pb-2 text-sm font-medium border-b-2 ${tab === 'metrics' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
           <BarChart3 className="h-4 w-4 inline mr-1" /> Metrics

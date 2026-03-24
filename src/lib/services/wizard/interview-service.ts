@@ -22,6 +22,7 @@ export type InterviewState =
   | 'q3_format'
   | 'q3_followup'
   | 'q4_testing'
+  | 'edge_cases'
   | 'confirm'
   | 'done'
 
@@ -38,7 +39,7 @@ export interface TechLevelProfile {
 }
 
 export interface ExtractedAnswer {
-  questionKey: 'capability' | 'trigger' | 'format' | 'testing'
+  questionKey: 'capability' | 'trigger' | 'format' | 'testing' | 'edge_cases'
   answer: string
   confidence: 'high' | 'medium' | 'low'
   needsFollowUp: boolean
@@ -88,6 +89,11 @@ export const INTERVIEW_QUESTIONS: QuestionDef[] = [
     key: 'testing',
     label: 'Should we set up test cases for this skill?',
     shortLabel: 'Testing',
+  },
+  {
+    key: 'edge_cases',
+    label: 'What edge cases or tricky scenarios should this skill handle?',
+    shortLabel: 'Edge Cases',
   },
 ]
 
@@ -152,7 +158,7 @@ export function detectTechLevel(messages: string[]): TechLevelProfile {
 
 // ─── Adaptive Language ──────────────────────────────────────────────────────
 
-function getAdaptiveTerms(level: TechLevel): Record<string, string> {
+export function getAdaptiveTerms(level: TechLevel): Record<string, string> {
   if (level === 'expert') {
     return {
       evalTerm: 'evaluation suite',
@@ -160,6 +166,22 @@ function getAdaptiveTerms(level: TechLevel): Record<string, string> {
       assertionTerm: 'assertion',
       skillTerm: 'SKILL.md',
       testTerm: 'eval cases',
+      passRate: 'pass rate',
+      baseline: 'baseline',
+      blindComparison: 'blind comparison',
+      iteration: 'iteration',
+      triggerDescription: 'trigger description',
+      evalSuite: 'eval suite',
+      evalCase: 'eval case',
+      skillVersion: 'version',
+      analyzer: 'analyzer',
+      improver: 'improver',
+      qualityGate: 'quality gate',
+      rubric: 'rubric',
+      delta: 'delta',
+      suggestion: 'suggestion',
+      falsePositive: 'false positive',
+      falseNegative: 'false negative',
     }
   }
   if (level === 'intermediate') {
@@ -169,6 +191,22 @@ function getAdaptiveTerms(level: TechLevel): Record<string, string> {
       assertionTerm: 'check',
       skillTerm: 'skill file',
       testTerm: 'test cases',
+      passRate: 'success rate',
+      baseline: 'reference version',
+      blindComparison: 'blind comparison',
+      iteration: 'improvement cycle',
+      triggerDescription: 'activation text',
+      evalSuite: 'test suite',
+      evalCase: 'test case',
+      skillVersion: 'version',
+      analyzer: 'analysis engine',
+      improver: 'improvement engine',
+      qualityGate: 'quality check',
+      rubric: 'scoring criteria',
+      delta: 'score difference',
+      suggestion: 'suggestion',
+      falsePositive: 'wrong activation',
+      falseNegative: 'missed activation',
     }
   }
   return {
@@ -177,7 +215,107 @@ function getAdaptiveTerms(level: TechLevel): Record<string, string> {
     assertionTerm: 'quality check',
     skillTerm: 'skill',
     testTerm: 'test examples',
+    passRate: 'success rate',
+    baseline: 'original version',
+    blindComparison: 'side-by-side comparison',
+    iteration: 'improvement round',
+    triggerDescription: 'activation description',
+    evalSuite: 'test collection',
+    evalCase: 'test example',
+    skillVersion: 'saved version',
+    analyzer: 'analyzer',
+    improver: 'improver',
+    qualityGate: 'quality check',
+    rubric: 'scoring guide',
+    delta: 'score change',
+    suggestion: 'recommendation',
+    falsePositive: 'accidental activation',
+    falseNegative: 'missed activation',
   }
+}
+
+// ─── Context Extraction ──────────────────────────────────────────────────────
+
+/**
+ * Extract answers from a user's initial message if they provide a lot of context upfront.
+ * Uses LLM to detect if the user already described capability, triggers, etc.
+ */
+export async function extractFromContext(
+  userMessage: string,
+): Promise<{
+  extractedAnswers: ExtractedAnswer[]
+  suggestedSkips: string[]
+}> {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey || userMessage.length < 100) {
+    return { extractedAnswers: [], suggestedSkips: [] }
+  }
+
+  const client = new Anthropic({ apiKey })
+
+  try {
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1024,
+      messages: [{
+        role: 'user',
+        content: `Analyze this user message and extract any answers to these interview questions:
+1. capability: What should this skill enable Claude to do?
+2. trigger: When should this skill trigger? What would a user say?
+3. format: What's the expected output format?
+4. testing: Should we set up test cases?
+5. edge_cases: What edge cases should this skill handle?
+
+User message:
+${userMessage}
+
+Respond with JSON:
+{
+  "extractions": [
+    {
+      "questionKey": "capability" | "trigger" | "format" | "testing" | "edge_cases",
+      "answer": "extracted answer text",
+      "confidence": "high" | "medium" | "low"
+    }
+  ]
+}
+
+Only include questions where you found a clear answer. Be conservative — only extract if the user explicitly addressed the topic. Respond ONLY with valid JSON.`,
+      }],
+    })
+
+    const text = response.content[0].type === 'text' ? response.content[0].text : ''
+    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]) as {
+        extractions?: Array<{
+          questionKey?: string
+          answer?: string
+          confidence?: string
+        }>
+      }
+
+      const validKeys = ['capability', 'trigger', 'format', 'testing', 'edge_cases']
+      const extractedAnswers: ExtractedAnswer[] = (parsed.extractions || [])
+        .filter(e => e.questionKey && validKeys.includes(e.questionKey) && e.answer)
+        .map(e => ({
+          questionKey: e.questionKey as ExtractedAnswer['questionKey'],
+          answer: e.answer!,
+          confidence: (e.confidence || 'medium') as 'high' | 'medium' | 'low',
+          needsFollowUp: e.confidence !== 'high',
+        }))
+
+      const suggestedSkips = extractedAnswers
+        .filter(a => a.confidence === 'high')
+        .map(a => a.questionKey)
+
+      return { extractedAnswers, suggestedSkips }
+    }
+  } catch {
+    // Fall through
+  }
+
+  return { extractedAnswers: [], suggestedSkips: [] }
 }
 
 // ─── Interview Engine ───────────────────────────────────────────────────────
@@ -207,16 +345,18 @@ export function getQuestionNumber(state: InterviewState): number {
       return 3
     case 'q4_testing':
       return 4
+    case 'edge_cases':
+      return 5
     case 'confirm':
     case 'done':
-      return 4
+      return 5
     default:
       return 1
   }
 }
 
 export function getTotalQuestions(): number {
-  return 4
+  return 5
 }
 
 /**
@@ -250,6 +390,29 @@ export async function processInterviewMessage(
   // Handle state transitions
   if (updatedContext.state === 'greeting') {
     updatedContext.state = 'q1_capability'
+
+    // If the user's first message is verbose (>100 chars), try to extract answers upfront
+    if (apiKey && userMessage.length > 100) {
+      const { extractedAnswers, suggestedSkips } = await extractFromContext(userMessage)
+      if (extractedAnswers.length > 0) {
+        // Merge extracted answers into context
+        for (const extracted of extractedAnswers) {
+          const existingIdx = updatedContext.extractedAnswers.findIndex(
+            a => a.questionKey === extracted.questionKey
+          )
+          if (existingIdx >= 0) {
+            updatedContext.extractedAnswers[existingIdx] = extracted
+          } else {
+            updatedContext.extractedAnswers.push(extracted)
+          }
+        }
+
+        // Skip questions that were answered with high confidence
+        if (suggestedSkips.includes('capability')) {
+          updatedContext.state = suggestedSkips.includes('trigger') ? 'q3_format' : 'q2_trigger'
+        }
+      }
+    }
   }
 
   // Use LLM to extract answer and generate response if API key available
@@ -272,7 +435,7 @@ async function processWithLLM(
 
   const currentQuestion = getCurrentQuestionKey(context.state)
 
-  const systemPrompt = `You are SkillForge's interview assistant, helping users create Claude Code skills through a structured 4-question interview.
+  const systemPrompt = `You are SkillForge's interview assistant, helping users create Claude Code skills through a structured 5-question interview.
 
 CURRENT STATE: ${context.state}
 USER TECH LEVEL: ${techLevel}
@@ -312,7 +475,8 @@ VALID NEXT STATES based on current state:
 - q2_followup → q3_format (always move on)
 - q3_format → q3_followup (if vague) OR q4_testing (if good)
 - q3_followup → q4_testing (always move on)
-- q4_testing → confirm (always)
+- q4_testing → edge_cases (always)
+- edge_cases → confirm (always)
 
 CURRENT QUESTION: ${getQuestionPromptForState(context.state, terms)}
 
@@ -367,10 +531,15 @@ IMPORTANT: Respond ONLY with valid JSON. No markdown, no extra text.`
           followUpReason: parsed.followUpReason,
         }
 
-        // Update or add extracted answer
+        // Update or add extracted answer — but don't overwrite high-confidence
+        // pre-extractions from extractFromContext
         const existingIdx = context.extractedAnswers.findIndex(a => a.questionKey === currentQuestion)
         if (existingIdx >= 0) {
-          context.extractedAnswers[existingIdx] = extractedAnswer
+          const existing = context.extractedAnswers[existingIdx]
+          // Only overwrite if the existing answer isn't already high-confidence
+          if (existing.confidence !== 'high' || confidence === 'high') {
+            context.extractedAnswers[existingIdx] = extractedAnswer
+          }
         } else {
           context.extractedAnswers.push(extractedAnswer)
         }
@@ -462,6 +631,8 @@ function getCurrentQuestionKey(state: InterviewState): ExtractedAnswer['question
       return 'format'
     case 'q4_testing':
       return 'testing'
+    case 'edge_cases':
+      return 'edge_cases'
     default:
       return null
   }
@@ -483,6 +654,8 @@ function getQuestionPromptForState(state: InterviewState, terms: Record<string, 
       return 'Follow up on Q3: The format answer was vague. Ask if they want structured or freeform output.'
     case 'q4_testing':
       return `Question 4: Should we set up ${terms.testTerm}? Suggest appropriate defaults based on the skill type. Explain WHY testing matters for this skill.`
+    case 'edge_cases':
+      return 'Question 5: What edge cases or tricky scenarios should this skill handle? Ask about: unusual inputs, error conditions, boundary cases, and when the skill should explicitly refuse to act.'
     default:
       return ''
   }
@@ -507,6 +680,8 @@ function getDefaultNextState(current: InterviewState, needsFollowUp: boolean, fo
     case 'q3_followup':
       return 'q4_testing'
     case 'q4_testing':
+      return 'edge_cases'
+    case 'edge_cases':
       return 'confirm'
     case 'confirm':
       return 'done'
@@ -520,7 +695,7 @@ function isValidState(state: string): boolean {
     'greeting', 'q1_capability', 'q1_followup',
     'q2_trigger', 'q2_followup',
     'q3_format', 'q3_followup',
-    'q4_testing', 'confirm', 'done',
+    'q4_testing', 'edge_cases', 'confirm', 'done',
   ]
   return valid.includes(state as InterviewState)
 }
@@ -535,6 +710,8 @@ function generateFallbackResponse(nextState: InterviewState, terms: Record<strin
       return 'Great examples! What output format do you expect? For example: markdown documentation, code files, JSON data, plain text, etc.'
     case 'q4_testing':
       return `Almost done! Should we set up ${terms.testTerm} for this skill? I\'d recommend it — testing helps catch edge cases early. I can generate some automatically based on your answers. Want me to include them?`
+    case 'edge_cases':
+      return 'Last question! Are there any tricky scenarios or edge cases this skill should handle? For example: unusual inputs, error conditions, or situations where it should refuse to act. This helps make the skill more robust.'
     case 'confirm':
       return 'I\'ve captured all the key details. Please review the answers below — you can click any card to edit it. When everything looks good, click "Generate Skill" to proceed.'
     default:
@@ -547,10 +724,10 @@ function generateFallbackResponse(nextState: InterviewState, terms: Record<strin
  */
 export function generateGreeting(mode: string): string {
   const modeIntros: Record<string, string> = {
-    scratch: "Let's create a new skill from scratch! I'll ask you 4 quick questions to understand what you need.",
-    extract: "Let's extract a skill from your experience! I'll ask 4 questions to capture the key patterns.",
-    synthesize: "Let's build a skill from your artifacts! I'll ask 4 questions to understand how to structure it.",
-    hybrid: "Let's create a skill combining your experience and documentation! 4 quick questions to get started.",
+    scratch: "Let's create a new skill from scratch! I'll ask you 5 quick questions to understand what you need.",
+    extract: "Let's extract a skill from your experience! I'll ask 5 questions to capture the key patterns.",
+    synthesize: "Let's build a skill from your artifacts! I'll ask 5 questions to understand how to structure it.",
+    hybrid: "Let's create a skill combining your experience and documentation! 5 quick questions to get started.",
   }
 
   return modeIntros[mode] || modeIntros.scratch
@@ -568,12 +745,14 @@ export function interviewAnswersToWizardInput(context: InterviewContext): {
   const capabilityAnswer = context.extractedAnswers.find(a => a.questionKey === 'capability')
   const triggerAnswer = context.extractedAnswers.find(a => a.questionKey === 'trigger')
   const formatAnswer = context.extractedAnswers.find(a => a.questionKey === 'format')
+  const edgeCasesAnswer = context.extractedAnswers.find(a => a.questionKey === 'edge_cases')
 
   // Build a rich intent from all answers
   const intentParts: string[] = []
   if (capabilityAnswer) intentParts.push(capabilityAnswer.answer)
   if (triggerAnswer) intentParts.push(`Trigger conditions: ${triggerAnswer.answer}`)
   if (formatAnswer) intentParts.push(`Output format: ${formatAnswer.answer}`)
+  if (edgeCasesAnswer) intentParts.push(`Edge cases to handle: ${edgeCasesAnswer.answer}`)
 
   // Extract trigger examples as concrete examples
   const triggerText = triggerAnswer?.answer || ''

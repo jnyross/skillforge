@@ -8,6 +8,7 @@ import {
   TrendingUp, ArrowRight, Lightbulb, Check, X,
   BarChart3, GitBranch, FileText,
 } from 'lucide-react'
+import { useTechLevel, toTitleCase } from '@/lib/context/tech-level-context'
 
 // --- Types ---
 
@@ -76,6 +77,7 @@ interface SkillVersion {
 export default function ImprovePage() {
   const params = useParams()
   const repoId = params.id as string
+  const { terms } = useTechLevel()
 
   const [versions, setVersions] = useState<SkillVersion[]>([])
   const [suites, setSuites] = useState<EvalSuite[]>([])
@@ -540,7 +542,7 @@ export default function ImprovePage() {
                     ? `${(selectedIteration.passRate * 100).toFixed(0)}%`
                     : 'N/A'}
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">Pass Rate</p>
+                <p className="text-xs text-muted-foreground mt-1">{toTitleCase(terms.passRate)}</p>
               </div>
               <div className="border border-border rounded-lg p-4 text-center">
                 <p className="text-3xl font-bold text-foreground">
@@ -560,13 +562,13 @@ export default function ImprovePage() {
                     ? `${selectedIteration.avgDelta > 0 ? '+' : ''}${selectedIteration.avgDelta.toFixed(2)}`
                     : 'N/A'}
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">Avg Delta</p>
+                <p className="text-xs text-muted-foreground mt-1">Avg {toTitleCase(terms.delta)}</p>
               </div>
               <div className="border border-border rounded-lg p-4 text-center">
                 <p className="text-3xl font-bold text-foreground">
                   {suggestions.length}
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">Suggestions</p>
+                <p className="text-xs text-muted-foreground mt-1">{toTitleCase(terms.suggestion)}s</p>
               </div>
             </div>
           )}
@@ -662,7 +664,7 @@ export default function ImprovePage() {
                 <div className="flex items-center gap-2">
                   <ArrowRight className="h-4 w-4" />
                   <span className="text-sm font-semibold">
-                    Improvement Suggestions ({acceptedIndices.size}/{suggestions.length} selected)
+                    {toTitleCase(terms.suggestion)}s ({acceptedIndices.size}/{suggestions.length} selected)
                   </span>
                 </div>
                 <div className="flex items-center gap-2">

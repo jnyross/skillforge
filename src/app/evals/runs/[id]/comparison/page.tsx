@@ -7,6 +7,8 @@ import {
   ChevronLeft, Trophy, Scale, TrendingUp, TrendingDown,
   Minus, Loader2, Play, AlertCircle
 } from 'lucide-react'
+import { useTechLevel, toTitleCase } from '@/lib/context/tech-level-context'
+import { TooltipTerm } from '@/components/ui/tooltip-term'
 
 interface ComparisonSummary {
   totalComparisons: number
@@ -64,6 +66,7 @@ interface ComparisonData {
 export default function ComparisonPage() {
   const params = useParams()
   const runId = params.id as string
+  const { terms } = useTechLevel()
 
   const [data, setData] = useState<ComparisonData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -134,7 +137,7 @@ export default function ComparisonPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Scale className="h-6 w-6 text-primary" />
-            <h1 className="text-2xl font-bold">Blind Comparison</h1>
+            <h1 className="text-2xl font-bold"><TooltipTerm term="blind comparison">Blind Comparison</TooltipTerm></h1>
             <span className="text-sm text-muted-foreground font-mono">{runId.slice(0, 8)}</span>
           </div>
           <div className="flex items-center gap-2">
@@ -198,7 +201,7 @@ export default function ComparisonPage() {
             <p className={`text-3xl font-bold ${deltaColor(data.summary.avgDelta)}`}>
               {data.summary.avgDelta > 0 ? '+' : ''}{data.summary.avgDelta}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">Avg Score Delta</p>
+            <p className="text-xs text-muted-foreground mt-1">Avg {toTitleCase(terms.delta)}</p>
           </div>
           <div className="border border-border rounded-lg p-4 text-center">
             <p className="text-3xl font-bold">{data.summary.avgSkillScore}</p>
@@ -206,7 +209,7 @@ export default function ComparisonPage() {
           </div>
           <div className="border border-border rounded-lg p-4 text-center">
             <p className="text-3xl font-bold text-muted-foreground">{data.summary.avgBaselineScore}</p>
-            <p className="text-xs text-muted-foreground mt-1">Avg Baseline Score</p>
+            <p className="text-xs text-muted-foreground mt-1">Avg {toTitleCase(terms.baseline)} Score</p>
           </div>
         </div>
       )}
@@ -325,7 +328,7 @@ export default function ComparisonPage() {
                     {/* Rubric Scores Side-by-Side */}
                     {skillRubric && baselineRubric && (
                       <div>
-                        <h4 className="text-sm font-medium mb-2">Rubric Scores</h4>
+                        <h4 className="text-sm font-medium mb-2"><TooltipTerm term="rubric score">Rubric Scores</TooltipTerm></h4>
                         <div className="grid grid-cols-2 gap-4">
                           {/* Skill rubric */}
                           <div className="border border-green-500/20 rounded-lg p-3">
