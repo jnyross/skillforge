@@ -623,6 +623,10 @@ model WizardDraft {
   smokeResultJson String     @default("{}")
   savedVersionId  String?
   savedRepoId     String?
+  // Interview state (PR 1: Conversational Intent Capture)
+  interviewContextJson String @default("") // Serialized InterviewContext for resume
+  interviewTranscript  String @default("") // Full interview transcript
+  extractedAnswersJson String @default("[]") // JSON array of ExtractedAnswer objects
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 }

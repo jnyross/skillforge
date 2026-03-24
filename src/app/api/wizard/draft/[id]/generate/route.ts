@@ -70,6 +70,15 @@ export async function POST(
     const freedomLevel: FreedomLevel = (['high', 'medium', 'low'].includes(draft.freedomLevel)
       ? draft.freedomLevel : 'medium') as FreedomLevel
 
+    // Parse interview extracted answers
+    let extractedAnswers: Array<{ questionKey: string; answer: string; confidence: string }> = []
+    try {
+      const parsed = JSON.parse(draft.extractedAnswersJson || '[]')
+      if (Array.isArray(parsed)) extractedAnswers = parsed
+    } catch {
+      // ignore
+    }
+
     const input: WizardInput = {
       mode,
       intent: draft.intent,
@@ -83,6 +92,8 @@ export async function POST(
       desiredOutputFormat: typeof config.desiredOutputFormat === 'string' ? config.desiredOutputFormat : undefined,
       safetyConstraints: typeof config.safetyConstraints === 'string' ? config.safetyConstraints : undefined,
       allowedTools: Array.isArray(config.allowedTools) ? config.allowedTools as string[] : undefined,
+      interviewTranscript: draft.interviewTranscript || undefined,
+      extractedAnswers: extractedAnswers.length > 0 ? extractedAnswers : undefined,
     }
 
     const result = await generateSkillFromWizard(input)
