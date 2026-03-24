@@ -433,6 +433,8 @@ export default function ImprovePage() {
                   onClick={() => {
                     setSelectedIteration(iter)
                     setAcceptedIndices(new Set(iter.acceptedIndices || []))
+                    setShowDiff(false)
+                    setDiffData(null)
                   }}
                   className={`flex flex-col items-center gap-1 px-4 py-3 rounded-md border min-w-[120px] ${
                     selectedIteration?.id === iter.id
