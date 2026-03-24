@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import {
-  MessageSquarePlus, Send, Loader2, Check, X, Pencil, ChevronLeft,
+  MessageSquarePlus, Send, Loader2, Check, X, Pencil,
   Plus, FlaskConical, Save, Trash2, BookOpen,
 } from 'lucide-react'
 
@@ -174,49 +174,53 @@ export default function EvalBuilderPage() {
 
   const sendCorpus = async () => {
     if (!corpusText.trim() || !activeSession) return
-
-    // First, update the corpus on the session
-    await fetch(`/api/eval-builder/sessions/${activeSession.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ corpusText: corpusText.trim() }),
-    })
-
-    // Then send a message about it
-    setInput(`Here's my knowledge corpus:\n\n${corpusText.trim()}`)
+    const corpus = corpusText.trim()
     setShowCorpusArea(false)
     setCorpusText('')
+    setSending(true)
+    setError('')
 
-    // Let the input state update, then send
-    setTimeout(() => {
-      const msg = `Here's my knowledge corpus:\n\n${corpusText.trim()}`
-      setInput('')
-      setSending(true)
+    const msg = `Here's my knowledge corpus:\n\n${corpus}`
 
-      const tempMsg: Message = {
-        id: `temp-${Date.now()}`,
-        role: 'user',
-        content: msg,
-        metadata: '{}',
-        createdAt: new Date().toISOString(),
-      }
-      setActiveSession(prev => prev ? {
-        ...prev,
-        messages: [...prev.messages, tempMsg],
-      } : null)
+    // Optimistically add user message
+    const tempMsg: Message = {
+      id: `temp-${Date.now()}`,
+      role: 'user',
+      content: msg,
+      metadata: '{}',
+      createdAt: new Date().toISOString(),
+    }
+    setActiveSession(prev => prev ? {
+      ...prev,
+      messages: [...prev.messages, tempMsg],
+    } : null)
 
-      fetch(`/api/eval-builder/sessions/${activeSession.id}/chat`, {
+    try {
+      // Update the corpus on the session first
+      await fetch(`/api/eval-builder/sessions/${activeSession.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ corpusText: corpus }),
+      })
+
+      // Then send the chat message (sequential, no race condition)
+      const res = await fetch(`/api/eval-builder/sessions/${activeSession.id}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: msg }),
-      }).then(async () => {
-        await loadSession(activeSession.id)
-        setSending(false)
-      }).catch(() => {
-        setError('Failed to process corpus')
-        setSending(false)
       })
-    }, 50)
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to process corpus')
+      }
+
+      await loadSession(activeSession.id)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to process corpus')
+    }
+    setSending(false)
+    inputRef.current?.focus()
   }
 
   const updateCase = async (caseId: string, action: 'accept' | 'reject' | 'edit', edits?: Partial<ProposedCase>) => {

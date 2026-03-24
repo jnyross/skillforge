@@ -276,87 +276,92 @@ export async function commitCases(
   const triggerCases = acceptedCases.filter(c => c.type === 'trigger')
   const outputCases = acceptedCases.filter(c => c.type === 'output')
 
-  const suiteIds: string[] = []
-  let totalCreated = 0
+  // Use a transaction to ensure atomic commit
+  const result = await prisma.$transaction(async (tx) => {
+    const suiteIds: string[] = []
+    let totalCreated = 0
 
-  // Create trigger suite if we have trigger cases
-  if (triggerCases.length > 0) {
-    const suiteName = `AI-Guided Trigger Suite — ${session.title || 'Untitled'}`
-    const suite = await prisma.evalSuite.create({
-      data: {
-        skillRepoId: session.skillRepoId,
-        name: suiteName,
-        type: 'trigger',
-        description: 'Created by AI-guided eval builder',
-      },
-    })
-    suiteIds.push(suite.id)
-
-    for (let i = 0; i < triggerCases.length; i++) {
-      const c = triggerCases[i]
-      await prisma.evalCase.create({
+    // Create trigger suite if we have trigger cases
+    if (triggerCases.length > 0) {
+      const suiteName = `AI-Guided Trigger Suite — ${session.title || 'Untitled'}`
+      const suite = await tx.evalSuite.create({
         data: {
-          evalSuiteId: suite.id,
-          key: `ai-guided-trigger-${i + 1}`,
-          name: c.name,
-          prompt: c.prompt,
-          shouldTrigger: c.shouldTrigger ?? true,
-          expectedOutcome: c.expectedOutcome,
-          split: c.split,
-          source: 'ai-guided',
-          tags: c.category,
+          skillRepoId: session.skillRepoId!,
+          name: suiteName,
+          type: 'trigger',
+          description: 'Created by AI-guided eval builder',
         },
       })
-      totalCreated++
+      suiteIds.push(suite.id)
+
+      for (let i = 0; i < triggerCases.length; i++) {
+        const c = triggerCases[i]
+        await tx.evalCase.create({
+          data: {
+            evalSuiteId: suite.id,
+            key: `ai-guided-trigger-${i + 1}`,
+            name: c.name,
+            prompt: c.prompt,
+            shouldTrigger: c.shouldTrigger ?? true,
+            expectedOutcome: c.expectedOutcome,
+            split: c.split,
+            source: 'ai-guided',
+            tags: c.category,
+          },
+        })
+        totalCreated++
+      }
     }
-  }
 
-  // Create output suite if we have output cases
-  if (outputCases.length > 0) {
-    const suiteName = `AI-Guided Output Suite — ${session.title || 'Untitled'}`
-    const suite = await prisma.evalSuite.create({
-      data: {
-        skillRepoId: session.skillRepoId,
-        name: suiteName,
-        type: 'output',
-        description: 'Created by AI-guided eval builder',
-      },
-    })
-    suiteIds.push(suite.id)
-
-    for (let i = 0; i < outputCases.length; i++) {
-      const c = outputCases[i]
-      await prisma.evalCase.create({
+    // Create output suite if we have output cases
+    if (outputCases.length > 0) {
+      const suiteName = `AI-Guided Output Suite — ${session.title || 'Untitled'}`
+      const suite = await tx.evalSuite.create({
         data: {
-          evalSuiteId: suite.id,
-          key: `ai-guided-output-${i + 1}`,
-          name: c.name,
-          prompt: c.prompt,
-          expectedOutcome: c.expectedOutcome,
-          split: c.split,
-          source: 'ai-guided',
-          tags: c.category,
-          configJson: JSON.stringify({
-            ...(c.assertionType ? { assertionType: c.assertionType } : {}),
-            ...(c.assertionValue ? { assertionValue: c.assertionValue } : {}),
-          }),
+          skillRepoId: session.skillRepoId!,
+          name: suiteName,
+          type: 'output',
+          description: 'Created by AI-guided eval builder',
         },
       })
-      totalCreated++
-    }
-  }
+      suiteIds.push(suite.id)
 
-  // Update session
-  await prisma.evalBuilderSession.update({
-    where: { id: sessionId },
-    data: {
-      phase: 'committed',
-      status: 'committed',
-      committedSuiteIds: suiteIds.join(','),
-    },
+      for (let i = 0; i < outputCases.length; i++) {
+        const c = outputCases[i]
+        await tx.evalCase.create({
+          data: {
+            evalSuiteId: suite.id,
+            key: `ai-guided-output-${i + 1}`,
+            name: c.name,
+            prompt: c.prompt,
+            expectedOutcome: c.expectedOutcome,
+            split: c.split,
+            source: 'ai-guided',
+            tags: c.category,
+            configJson: JSON.stringify({
+              ...(c.assertionType ? { assertionType: c.assertionType } : {}),
+              ...(c.assertionValue ? { assertionValue: c.assertionValue } : {}),
+            }),
+          },
+        })
+        totalCreated++
+      }
+    }
+
+    // Update session
+    await tx.evalBuilderSession.update({
+      where: { id: sessionId },
+      data: {
+        phase: 'committed',
+        status: 'committed',
+        committedSuiteIds: suiteIds.join(','),
+      },
+    })
+
+    return { suiteIds, caseCount: totalCreated }
   })
 
-  return { suiteIds, caseCount: totalCreated }
+  return result
 }
 
 /**
