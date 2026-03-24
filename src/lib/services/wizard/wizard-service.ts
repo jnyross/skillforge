@@ -214,45 +214,49 @@ export async function generateSkillFromWizard(input: WizardInput): Promise<Gener
     }
 
     if (review.shouldRegenerate) {
-      // One retry with LLM feedback
-      const regenerationFeedback = buildRegenerationFeedback(review)
-      const retryPrompt = buildGenerationPrompt(input, regenerationFeedback)
+      try {
+        // One retry with LLM feedback
+        const regenerationFeedback = buildRegenerationFeedback(review)
+        const retryPrompt = buildGenerationPrompt(input, regenerationFeedback)
 
-      const retryResponse = await client.messages.create({
-        model: 'claude-opus-4-6',
-        max_tokens: 8192,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: retryPrompt }],
-      })
+        const retryResponse = await client.messages.create({
+          model: 'claude-opus-4-6',
+          max_tokens: 8192,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: retryPrompt }],
+        })
 
-      const retryText = retryResponse.content[0].type === 'text' ? retryResponse.content[0].text : ''
-      const retryResult = parseGenerationResponse(retryText, input)
+        const retryText = retryResponse.content[0].type === 'text' ? retryResponse.content[0].text : ''
+        const retryResult = parseGenerationResponse(retryText, input)
 
-      // Re-validate and re-review
-      const retryQuality = validateSkillQuality(retryResult.skillMd, input.intent)
-      const retryReview = await reviewSkillQuality(retryResult.skillMd, input.intent, input.mode)
+        // Re-validate and re-review
+        const retryQuality = validateSkillQuality(retryResult.skillMd, input.intent)
+        const retryReview = await reviewSkillQuality(retryResult.skillMd, input.intent, input.mode)
 
-      retryResult.qualityScore = retryQuality.score
-      retryResult.qualityIssues = retryQuality.issues.map(i => `[${i.severity.toUpperCase()}] ${i.message}`)
-      retryResult.reviewScore = retryReview.score
-      retryResult.reviewFeedback = {
-        strengths: retryReview.strengths,
-        weaknesses: retryReview.weaknesses,
-        suggestions: retryReview.suggestions,
-        reasoning: retryReview.reasoning,
-      }
+        retryResult.qualityScore = retryQuality.score
+        retryResult.qualityIssues = retryQuality.issues.map(i => `[${i.severity.toUpperCase()}] ${i.message}`)
+        retryResult.reviewScore = retryReview.score
+        retryResult.reviewFeedback = {
+          strengths: retryReview.strengths,
+          weaknesses: retryReview.weaknesses,
+          suggestions: retryReview.suggestions,
+          reasoning: retryReview.reasoning,
+        }
 
-      // Use the better result — but only if retry also passes Phase 1 structural checks
-      const originalTotal = (result.qualityScore || 0) + (result.reviewScore || 0)
-      const retryTotal = (retryResult.qualityScore || 0) + (retryResult.reviewScore || 0)
+        // Use the better result — but only if retry also passes Phase 1 structural checks
+        const originalTotal = (result.qualityScore || 0) + (result.reviewScore || 0)
+        const retryTotal = (retryResult.qualityScore || 0) + (retryResult.reviewScore || 0)
 
-      if (retryTotal > originalTotal && retryQuality.passed) {
-        retryResult.warnings.push('Regenerated after expert review feedback (improved).')
-        result = retryResult
-      } else if (retryTotal > originalTotal && !retryQuality.passed) {
-        result.warnings.push('Regeneration scored higher but failed structural checks — keeping original.')
-      } else {
-        result.warnings.push('Regeneration attempted but original was better.')
+        if (retryTotal >= originalTotal && retryQuality.passed) {
+          retryResult.warnings.push('Regenerated after expert review feedback (improved).')
+          result = retryResult
+        } else if (retryTotal > originalTotal && !retryQuality.passed) {
+          result.warnings.push('Regeneration scored higher but failed structural checks — keeping original.')
+        } else {
+          result.warnings.push('Regeneration attempted but original was better.')
+        }
+      } catch {
+        result.warnings.push('Phase 2 retry generation failed — keeping original result.')
       }
     }
 
