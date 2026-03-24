@@ -75,6 +75,9 @@ export async function POST(
   if (!suite) {
     return NextResponse.json({ error: 'Eval suite not found' }, { status: 404 })
   }
+  if (suite.skillRepoId !== skillRepoId) {
+    return NextResponse.json({ error: 'Eval suite does not belong to this skill repo' }, { status: 400 })
+  }
 
   // Check no iteration is already running for this version
   const runningIteration = await prisma.improvementIteration.findFirst({

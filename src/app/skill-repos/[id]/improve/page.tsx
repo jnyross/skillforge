@@ -188,6 +188,7 @@ export default function ImprovePage() {
             const currentIter = iters.find((i: Iteration) => i.id === data.iterationId)
             if (currentIter) {
               setSelectedIteration(currentIter)
+              setAcceptedIndices(new Set(currentIter.acceptedIndices || []))
               if (currentIter.status === 'completed' || currentIter.status === 'failed') {
                 clearInterval(interval)
                 setPollingId(null)
