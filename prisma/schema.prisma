@@ -35,6 +35,7 @@ model SkillRepo {
   branches                 SkillBranch[]
   evalBuilderSessions      EvalBuilderSession[]
   triggerOptimizationRuns   TriggerOptimizationRun[]
+  improvementIterations    ImprovementIteration[]
 }
 
 model SkillVersion {
@@ -66,6 +67,8 @@ model SkillVersion {
   candidateVersions OptimizerCandidate[] @relation("CandidateVersion")
   parentCandidates  OptimizerCandidate[] @relation("CandidateParentVersion")
   branchHeads       SkillBranch[] @relation("BranchHead")
+  improvementSources ImprovementIteration[] @relation("ImprovementSource")
+  improvementResults ImprovementIteration[] @relation("ImprovementResult")
 
   @@index([skillRepoId, createdAt])
   @@index([skillRepoId, branchName, createdAt])
@@ -886,6 +889,43 @@ model TriggerOptimizationIteration {
 
   @@index([runId])
   @@index([runId, iteration])
+}
+
+// =============================================================================
+// Improvement Loop entities (PR 6)
+// =============================================================================
+
+model ImprovementIteration {
+  id                String     @id @default(uuid())
+  skillRepoId       String
+  sourceVersionId   String     // The version being improved
+  resultVersionId   String?    // The new version created after applying suggestions
+  iterationNumber   Int        @default(1)
+  status            String     @default("pending") // pending | running | analyzing | completed | failed
+  // Eval results
+  evalRunId         String?    // The eval run for this iteration
+  passRate          Float?
+  // Comparison results
+  comparisonRunId   String?    // Reference to blind comparison
+  skillWinRate      Float?
+  avgDelta          Float?
+  // Analysis results (from analyzer agent)
+  analysisJson      String     @default("{}") // Full AnalysisResult JSON
+  // Suggestions
+  suggestionsJson   String     @default("[]") // Array of improvement suggestions
+  acceptedIndices   String     @default("[]") // Indices of accepted suggestions
+  // Metadata
+  error             String?
+  createdAt         DateTime   @default(now())
+  completedAt       DateTime?
+
+  skillRepo         SkillRepo  @relation(fields: [skillRepoId], references: [id], onDelete: Cascade)
+  sourceVersion     SkillVersion @relation("ImprovementSource", fields: [sourceVersionId], references: [id])
+  resultVersion     SkillVersion? @relation("ImprovementResult", fields: [resultVersionId], references: [id])
+
+  @@index([skillRepoId])
+  @@index([sourceVersionId])
+  @@index([status])
 }
 
 model AuditLog {
