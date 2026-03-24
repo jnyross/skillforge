@@ -71,8 +71,10 @@ export async function gradeSemanticAssertion(
   const userPrompt = buildGraderUserPrompt(assertion, output, prompt)
 
   try {
+    // Use a cheaper model for grading (sonnet) but fall back to config default
+    const graderModel = process.env.SEMANTIC_GRADER_MODEL || 'claude-sonnet-4-20250514'
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: graderModel,
       max_tokens: 4096,
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],

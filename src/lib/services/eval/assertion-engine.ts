@@ -60,6 +60,13 @@ export interface AssertionResult {
   actual?: unknown
   evidence: string
   durationMs: number
+  // Semantic grading structured data (only populated for type === 'semantic')
+  semanticEvidence?: string
+  semanticReasoning?: string
+  semanticConfidence?: number
+  semanticDimension?: string
+  semanticClaimsJson?: string
+  semanticEvalFeedbackJson?: string
 }
 
 /**
@@ -734,6 +741,13 @@ async function assertSemantic(
       actual: result.evidence.slice(0, 500),
       evidence: `[${dimension.toUpperCase()}] ${result.passed ? 'PASS' : 'FAIL'} (confidence: ${(result.confidence * 100).toFixed(0)}%)\n\nEvidence: ${result.evidence}\n\nReasoning: ${result.reasoning}${result.claims.length > 0 ? `\n\nClaims verified: ${result.claims.filter(c => c.verified).length}/${result.claims.length}` : ''}${result.evalFeedback ? `\n\nEval feedback: ${result.evalFeedback.overall}` : ''}`,
       durationMs: Date.now() - start,
+      // Structured semantic data for persistence
+      semanticEvidence: result.evidence,
+      semanticReasoning: result.reasoning,
+      semanticConfidence: result.confidence,
+      semanticDimension: dimension,
+      semanticClaimsJson: JSON.stringify(result.claims),
+      semanticEvalFeedbackJson: result.evalFeedback ? JSON.stringify(result.evalFeedback) : '{}',
     }
   } catch (err) {
     return {
