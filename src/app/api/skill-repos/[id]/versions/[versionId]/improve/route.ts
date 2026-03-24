@@ -137,7 +137,8 @@ export async function POST(
 }
 
 /**
- * Run an iteration in the background, updating the pre-created record.
+ * Run an iteration in the background, using the pre-created iteration record.
+ * runIteration handles all DB updates internally via the iterationId param.
  */
 async function runIterationInBackground(
   iterationId: string,
@@ -149,25 +150,10 @@ async function runIterationInBackground(
   }
 ) {
   try {
-    const result = await runIteration(input)
-
-    // Update the pre-created iteration with results
-    await prisma.improvementIteration.update({
-      where: { id: iterationId },
-      data: {
-        status: result.status,
-        passRate: result.passRate,
-        skillWinRate: result.skillWinRate,
-        avgDelta: result.avgDelta,
-        analysisJson: result.analysis ? JSON.stringify(result.analysis) : '{}',
-        suggestionsJson: result.analysis
-          ? JSON.stringify(result.analysis.improvement_suggestions)
-          : '[]',
-        completedAt: new Date(),
-        error: result.error || null,
-      },
-    })
+    // Pass iterationId so runIteration uses the pre-created record (no duplicate)
+    await runIteration({ ...input, iterationId })
   } catch (err) {
+    // Fallback error handler in case runIteration itself throws unexpectedly
     const errorMsg = err instanceof Error ? err.message : String(err)
     await prisma.improvementIteration.update({
       where: { id: iterationId },

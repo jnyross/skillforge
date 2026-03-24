@@ -27,6 +27,8 @@ export interface IterationInput {
   evalSuiteId: string
   /** Executor configuration */
   executorConfig: ExecutorConfig
+  /** Pre-created iteration ID (from route handler). If provided, uses this record instead of creating a new one. */
+  iterationId?: string
 }
 
 export interface IterationResult {
@@ -50,31 +52,36 @@ export interface IterationResult {
  * Steps: eval -> baseline -> compare -> analyze -> suggest
  */
 export async function runIteration(input: IterationInput): Promise<IterationResult> {
-  // Find the latest iteration number for this version
-  const latestIteration = await prisma.improvementIteration.findFirst({
-    where: { skillRepoId: input.skillRepoId, sourceVersionId: input.skillVersionId },
-    orderBy: { iterationNumber: 'desc' },
-    select: { iterationNumber: true },
-  })
+  let iterationId: string
 
-  const iterationNumber = (latestIteration?.iterationNumber ?? 0) + 1
-
-  // Create the iteration record
-  const iteration = await prisma.improvementIteration.create({
-    data: {
-      skillRepoId: input.skillRepoId,
-      sourceVersionId: input.skillVersionId,
-      iterationNumber,
-      status: 'running',
-    },
-  })
+  if (input.iterationId) {
+    // Use the pre-created iteration record from the route handler
+    iterationId = input.iterationId
+    await prisma.improvementIteration.update({
+      where: { id: iterationId },
+      data: { status: 'running' },
+    })
+  } else {
+    // Create a new iteration record (standalone usage)
+    const latestIteration = await prisma.improvementIteration.findFirst({
+      where: { skillRepoId: input.skillRepoId, sourceVersionId: input.skillVersionId },
+      orderBy: { iterationNumber: 'desc' },
+      select: { iterationNumber: true },
+    })
+    const iterationNumber = (latestIteration?.iterationNumber ?? 0) + 1
+    const iteration = await prisma.improvementIteration.create({
+      data: {
+        skillRepoId: input.skillRepoId,
+        sourceVersionId: input.skillVersionId,
+        iterationNumber,
+        status: 'running',
+      },
+    })
+    iterationId = iteration.id
+  }
 
   try {
     // Step 1: Create and run eval
-    await prisma.improvementIteration.update({
-      where: { id: iteration.id },
-      data: { status: 'running' },
-    })
 
     const evalRun = await prisma.evalRun.create({
       data: {
@@ -112,7 +119,7 @@ export async function runIteration(input: IterationInput): Promise<IterationResu
 
     // Update iteration with eval results
     await prisma.improvementIteration.update({
-      where: { id: iteration.id },
+      where: { id: iterationId },
       data: { evalRunId: evalRun.id, passRate },
     })
 
@@ -124,6 +131,8 @@ export async function runIteration(input: IterationInput): Promise<IterationResu
     let skillWinRate: number | null = null
     let avgDelta: number | null = null
     const comparisonResults: Array<{ winner: string; delta: number }> = []
+    // Track which case runs were actually used for comparison (Bug fix: avoid mismatch with outputCaseRuns[0])
+    const comparedCaseRuns: typeof outputCaseRuns = []
 
     if (outputCaseRuns.length > 0) {
       // Run baseline and comparison on up to 3 cases (to save cost)
@@ -161,6 +170,7 @@ export async function runIteration(input: IterationInput): Promise<IterationResu
             winner: comparison.winnerLabel,
             delta: comparison.delta,
           })
+          comparedCaseRuns.push(caseRun)
 
           // Store baseline output on case run
           await prisma.evalCaseRun.update({
@@ -188,7 +198,7 @@ export async function runIteration(input: IterationInput): Promise<IterationResu
 
     // Update iteration with comparison results
     await prisma.improvementIteration.update({
-      where: { id: iteration.id },
+      where: { id: iterationId },
       data: {
         skillWinRate,
         avgDelta,
@@ -218,8 +228,8 @@ export async function runIteration(input: IterationInput): Promise<IterationResu
         skillContent = '(Could not read SKILL.md)'
       }
 
-      // Use the first comparison case for analysis context
-      const firstCaseRun = outputCaseRuns[0]
+      // Use the first case run that was actually compared (not outputCaseRuns[0] which may have been skipped)
+      const firstCaseRun = comparedCaseRuns[0]
       const skillOutputJson = firstCaseRun.outputJson
         ? JSON.parse(firstCaseRun.outputJson) as { result?: string }
         : null
@@ -273,7 +283,7 @@ export async function runIteration(input: IterationInput): Promise<IterationResu
 
     // Step 4: Save analysis results and suggestions
     await prisma.improvementIteration.update({
-      where: { id: iteration.id },
+      where: { id: iterationId },
       data: {
         status: 'completed',
         completedAt: new Date(),
@@ -283,7 +293,7 @@ export async function runIteration(input: IterationInput): Promise<IterationResu
     })
 
     return {
-      iterationId: iteration.id,
+      iterationId,
       status: 'completed',
       passRate,
       skillWinRate,
@@ -294,7 +304,7 @@ export async function runIteration(input: IterationInput): Promise<IterationResu
     const errorMsg = err instanceof Error ? err.message : String(err)
 
     await prisma.improvementIteration.update({
-      where: { id: iteration.id },
+      where: { id: iterationId },
       data: {
         status: 'failed',
         error: errorMsg,
@@ -303,7 +313,7 @@ export async function runIteration(input: IterationInput): Promise<IterationResu
     })
 
     return {
-      iterationId: iteration.id,
+      iterationId,
       status: 'failed',
       passRate: null,
       skillWinRate: null,
