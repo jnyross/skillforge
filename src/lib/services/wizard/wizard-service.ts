@@ -179,6 +179,7 @@ export async function generateSkillFromWizard(input: WizardInput): Promise<Gener
       }
 
       if (qualityCheck.passed) {
+        bestResult = result // Always prefer a passing result over a higher-scoring failing one
         break // Passed Phase 1, proceed to Phase 2
       }
 
@@ -187,7 +188,11 @@ export async function generateSkillFromWizard(input: WizardInput): Promise<Gener
         qualityFeedback = buildQualityFeedback(qualityCheck)
         result.warnings.push(`Phase 1 quality check failed (attempt ${attempt + 1}). Retrying with feedback.`)
       } else {
-        result.warnings.push(`Phase 1 quality check failed after ${MAX_PHASE1_RETRIES + 1} attempts. Proceeding with best result.`)
+        const failWarning = `Phase 1 quality check failed after ${MAX_PHASE1_RETRIES + 1} attempts. Proceeding with best result.`
+        result.warnings.push(failWarning)
+        if (bestResult && bestResult !== result) {
+          bestResult.warnings.push(failWarning)
+        }
       }
     }
 
@@ -443,9 +448,9 @@ description: ${JSON.stringify(input.intent.slice(0, 200))}
 
 Based on the user's intent: "${input.intent}"
 
-1. Analyze the request
-2. Execute the task
-3. Verify the output
+1. Understand the user's specific requirements
+2. Plan and implement the solution step by step
+3. Check the output meets all stated requirements
 
 ## Gotchas
 - This is an auto-generated skill. Review and refine before production use.
