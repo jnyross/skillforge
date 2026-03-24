@@ -10,6 +10,7 @@ import { prisma } from '@/lib/prisma'
 import { getProgress, runOptimizationLoop, promoteBestDescription } from '@/lib/services/trigger-optimizer/trigger-optimizer-service'
 import { getFilesAtCommit, createVersion } from '@/lib/services/git-storage'
 import { updateDescription } from '@/lib/services/trigger-optimizer/trigger-evaluator'
+import { estimateTokenCount, countLines } from '@/lib/services/skill-parser'
 
 export async function GET(
   _req: Request,
@@ -84,8 +85,8 @@ export async function POST(
           parentVersionId: version.id,
           commitMessage: `Optimize trigger description (test score: ${(run.bestTestScore * 100).toFixed(0)}%)`,
           createdBy: 'trigger-optimizer',
-          tokenCount: updatedFiles.reduce((sum, f) => sum + f.content.length, 0),
-          lineCount: updatedFiles.reduce((sum, f) => sum + f.content.split('\n').length, 0),
+          tokenCount: estimateTokenCount(updatedFiles.map(f => f.content).join('\n')),
+          lineCount: countLines(updatedFiles.map(f => f.content).join('\n')),
           fileCount: updatedFiles.length,
         },
       })
