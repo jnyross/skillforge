@@ -878,7 +878,7 @@ export default function WizardPage() {
               <p className="text-lg font-bold">
                 {(() => {
                   const descMatch = editedSkillMd.match(/^description:\s*(.+)$/m)
-                  return descMatch ? descMatch[1].length : 0
+                  return descMatch ? descMatch[1].trim().replace(/^["']|["']$/g, '').length : 0
                 })()}
               </p>
               <p className="text-xs text-muted-foreground">Max 1024 chars</p>
