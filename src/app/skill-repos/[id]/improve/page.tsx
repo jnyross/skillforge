@@ -730,16 +730,17 @@ export default function ImprovePage() {
             </div>
           )}
 
-          {/* Empty state */}
-          {iterations.length === 0 && (
-            <div className="text-center py-12 border border-dashed border-border rounded-lg">
-              <TrendingUp className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No iterations yet</h3>
-              <p className="text-muted-foreground text-sm mb-4">
-                Select a version and eval suite, then click &quot;Run Improvement Iteration&quot; to start the improvement loop.
-              </p>
-            </div>
-          )}
+        </div>
+      )}
+
+      {/* Empty state */}
+      {iterations.length === 0 && !loading && (
+        <div className="text-center py-12 border border-dashed border-border rounded-lg">
+          <TrendingUp className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+          <h3 className="text-lg font-semibold mb-2">No iterations yet</h3>
+          <p className="text-muted-foreground text-sm mb-4">
+            Select a version and eval suite, then click &quot;Run Improvement Iteration&quot; to start the improvement loop.
+          </p>
         </div>
       )}
     </div>

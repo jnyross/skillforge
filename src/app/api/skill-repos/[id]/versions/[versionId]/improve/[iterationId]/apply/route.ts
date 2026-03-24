@@ -35,6 +35,13 @@ export async function POST(
     return NextResponse.json({ error: 'Iteration not found' }, { status: 404 })
   }
 
+  if (iteration.skillRepoId !== skillRepoId || iteration.sourceVersionId !== versionId) {
+    return NextResponse.json(
+      { error: 'Iteration does not belong to this repo/version' },
+      { status: 400 }
+    )
+  }
+
   if (iteration.status !== 'completed') {
     return NextResponse.json(
       { error: `Cannot apply suggestions: iteration is in '${iteration.status}' status` },
