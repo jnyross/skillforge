@@ -212,14 +212,51 @@ IMPORTANT: Output ONLY the JSON object. No preamble, no explanation, no markdown
 
 // --- Response Parsing ---
 
-function parseComparatorResponse(text: string): Omit<ComparisonResult, 'winnerLabel' | 'delta' | 'skillIsA'> {
-  // Extract JSON from response (may have markdown fences or preamble)
-  const jsonMatch = text.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) {
-    throw new Error('Blind comparator did not return valid JSON')
+/**
+ * Extract the first complete top-level JSON object from text using depth-counting.
+ * Handles cases where LLM includes curly braces in reasoning text before the JSON.
+ */
+function extractFirstJsonObject(text: string): string {
+  const firstBrace = text.indexOf('{')
+  if (firstBrace === -1) {
+    throw new Error('No JSON object found in text')
   }
 
-  const parsed = JSON.parse(jsonMatch[0]) as {
+  let depth = 0
+  let inString = false
+  let escape = false
+  for (let i = firstBrace; i < text.length; i++) {
+    const ch = text[i]
+    if (escape) {
+      escape = false
+      continue
+    }
+    if (ch === '\\' && inString) {
+      escape = true
+      continue
+    }
+    if (ch === '"') {
+      inString = !inString
+      continue
+    }
+    if (inString) continue
+    if (ch === '{') depth++
+    else if (ch === '}') {
+      depth--
+      if (depth === 0) {
+        return text.slice(firstBrace, i + 1)
+      }
+    }
+  }
+
+  throw new Error('Unterminated JSON object in comparator response')
+}
+
+function parseComparatorResponse(text: string): Omit<ComparisonResult, 'winnerLabel' | 'delta' | 'skillIsA'> {
+  // Extract JSON from response using depth-counting (handles curly braces in reasoning)
+  const jsonStr = extractFirstJsonObject(text)
+
+  const parsed = JSON.parse(jsonStr) as {
     winner: string
     reasoning: string
     rubric: {

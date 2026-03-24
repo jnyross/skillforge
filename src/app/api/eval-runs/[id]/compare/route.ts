@@ -134,6 +134,29 @@ export async function POST(
         executorConfig
       )
 
+      // Check if baseline execution failed
+      if (baselineOutput.isError) {
+        // Store the error but skip comparison
+        await prisma.evalCaseRun.update({
+          where: { id: caseRun.id },
+          data: {
+            baselineOutputJson: JSON.stringify({
+              result: baselineOutput.result.slice(0, 50000),
+              durationMs: baselineOutput.durationMs,
+              costUsd: baselineOutput.costUsd,
+              model: baselineOutput.model,
+              isError: true,
+            }),
+          },
+        })
+        results.push({
+          caseRunId: caseRun.id,
+          winner: 'error: baseline execution failed',
+          delta: 0,
+        })
+        continue
+      }
+
       // Store baseline output on the case run
       await prisma.evalCaseRun.update({
         where: { id: caseRun.id },
