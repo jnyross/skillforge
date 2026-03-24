@@ -127,11 +127,13 @@ export async function processMessage(
     },
   })
 
-  // Build conversation history for Claude
+  // Build conversation history for Claude (must start with 'user' role per Anthropic API)
   const messages: Array<{ role: 'user' | 'assistant'; content: string }> = []
 
+  let foundUser = false
   for (const msg of session.messages) {
-    if (msg.role === 'user' || msg.role === 'assistant') {
+    if (msg.role === 'user') foundUser = true
+    if (foundUser && (msg.role === 'user' || msg.role === 'assistant')) {
       messages.push({ role: msg.role as 'user' | 'assistant', content: msg.content })
     }
   }
@@ -197,7 +199,7 @@ export async function processMessage(
   }
 
   // Check if user provided corpus text (look for long messages or explicit sharing)
-  if (userMessage.length > 200 && session.phase === 'understanding') {
+  if (userMessage.length > 200 && session.phase === 'understanding' && newPhase === 'understanding') {
     newPhase = 'corpus'
     await prisma.evalBuilderSession.update({
       where: { id: sessionId },
