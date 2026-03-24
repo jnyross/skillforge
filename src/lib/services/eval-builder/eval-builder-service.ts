@@ -197,7 +197,7 @@ export async function processMessage(
   }
 
   // Check if user provided corpus text (look for long messages or explicit sharing)
-  if (userMessage.length > 200 && newPhase === 'understanding') {
+  if (userMessage.length > 200 && session.phase === 'understanding') {
     newPhase = 'corpus'
     await prisma.evalBuilderSession.update({
       where: { id: sessionId },
@@ -265,6 +265,10 @@ export async function commitCases(
     throw new Error('Session not found or no skill repo selected')
   }
 
+  if (session.status === 'committed') {
+    throw new Error('Session already committed')
+  }
+
   const allCases = JSON.parse(session.proposedCasesJson || '[]') as ProposedCase[]
   const acceptedCases = allCases.filter(c => c.status === 'accepted' || c.status === 'edited')
 
@@ -283,7 +287,7 @@ export async function commitCases(
 
     // Create trigger suite if we have trigger cases
     if (triggerCases.length > 0) {
-      const suiteName = `AI-Guided Trigger Suite — ${session.title || 'Untitled'}`
+      const suiteName = `AI-Guided Trigger Suite — ${session.title || 'Untitled'} (${session.id.slice(0, 8)})`
       const suite = await tx.evalSuite.create({
         data: {
           skillRepoId: session.skillRepoId!,
@@ -315,7 +319,7 @@ export async function commitCases(
 
     // Create output suite if we have output cases
     if (outputCases.length > 0) {
-      const suiteName = `AI-Guided Output Suite — ${session.title || 'Untitled'}`
+      const suiteName = `AI-Guided Output Suite — ${session.title || 'Untitled'} (${session.id.slice(0, 8)})`
       const suite = await tx.evalSuite.create({
         data: {
           skillRepoId: session.skillRepoId!,
