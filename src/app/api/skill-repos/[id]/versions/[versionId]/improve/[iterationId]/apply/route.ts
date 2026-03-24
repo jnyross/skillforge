@@ -122,8 +122,9 @@ export async function POST(
       newFiles.push(existingFile)
     }
 
-    // Add new/modified files from the improver
+    // Add new/modified files from the improver (skip SKILL.md to avoid duplicates)
     for (const file of improved.files) {
+      if (file.path === 'SKILL.md') continue
       newFiles.push({
         path: file.path,
         content: file.content,
