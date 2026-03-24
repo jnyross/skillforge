@@ -242,13 +242,15 @@ export async function generateSkillFromWizard(input: WizardInput): Promise<Gener
         reasoning: retryReview.reasoning,
       }
 
-      // Use the better result
+      // Use the better result — but only if retry also passes Phase 1 structural checks
       const originalTotal = (result.qualityScore || 0) + (result.reviewScore || 0)
       const retryTotal = (retryResult.qualityScore || 0) + (retryResult.reviewScore || 0)
 
-      if (retryTotal > originalTotal) {
+      if (retryTotal > originalTotal && retryQuality.passed) {
         retryResult.warnings.push('Regenerated after expert review feedback (improved).')
         result = retryResult
+      } else if (retryTotal > originalTotal && !retryQuality.passed) {
+        result.warnings.push('Regeneration scored higher but failed structural checks — keeping original.')
       } else {
         result.warnings.push('Regeneration attempted but original was better.')
       }
