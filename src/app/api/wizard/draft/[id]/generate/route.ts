@@ -93,13 +93,17 @@ export async function POST(
       data: {
         status: 'review',
         generatedSkill: result.skillMd,
-        generatedEvals: JSON.stringify({
-          triggerSuite: result.triggerSuite,
-          outputSuite: result.outputSuite,
-          smokePlan: result.smokePlan,
-          warnings: result.warnings,
-          files: result.files,
-        }),
+          generatedEvals: JSON.stringify({
+            triggerSuite: result.triggerSuite,
+            outputSuite: result.outputSuite,
+            smokePlan: result.smokePlan,
+            warnings: result.warnings,
+            files: result.files,
+            qualityScore: result.qualityScore,
+            qualityIssues: result.qualityIssues,
+            reviewScore: result.reviewScore,
+            reviewFeedback: result.reviewFeedback,
+          }),
       },
     })
 
