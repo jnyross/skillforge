@@ -266,13 +266,13 @@ export default function TriggerOptimizerPage() {
                   <p className={`text-3xl font-bold ${scoreColor(selectedRun.bestTestScore)}`}>
                     {(selectedRun.bestTestScore * 100).toFixed(0)}%
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">Best {terms.testSplit} Score</p>
+                  <p className="text-xs text-muted-foreground mt-1">Best {toTitleCase(terms.testSplit)} Score</p>
                 </div>
                 <div className="border border-border rounded-lg p-4 text-center">
                   <p className={`text-3xl font-bold ${scoreColor(selectedRun.bestTrainScore)}`}>
                     {(selectedRun.bestTrainScore * 100).toFixed(0)}%
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">Best {terms.trainSplit} Score</p>
+                  <p className="text-xs text-muted-foreground mt-1">Best {toTitleCase(terms.trainSplit)} Score</p>
                 </div>
                 <div className="border border-border rounded-lg p-4 text-center">
                   <p className="text-3xl font-bold text-foreground">
@@ -284,7 +284,7 @@ export default function TriggerOptimizerPage() {
                   <p className="text-3xl font-bold text-foreground">
                     {queries.length}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">{terms.evalCase}s</p>
+                  <p className="text-xs text-muted-foreground mt-1">{toTitleCase(terms.evalCase)}s</p>
                 </div>
               </div>
 

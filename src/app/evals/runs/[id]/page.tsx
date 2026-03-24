@@ -231,7 +231,7 @@ export default function EvalRunDetailPage() {
         <div className="flex gap-6 border border-border rounded-lg p-4">
           <div className="text-center">
             <p className="text-2xl font-bold">{(benchmark.passRate * 100).toFixed(1)}%</p>
-            <p className="text-xs text-muted-foreground">{terms.passRate}</p>
+            <p className="text-xs text-muted-foreground">{toTitleCase(terms.passRate)}</p>
           </div>
           <div className="text-center">
             <p className="text-2xl font-bold text-green-400">{benchmark.passedCases}</p>

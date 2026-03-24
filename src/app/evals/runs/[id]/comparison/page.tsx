@@ -7,7 +7,7 @@ import {
   ChevronLeft, Trophy, Scale, TrendingUp, TrendingDown,
   Minus, Loader2, Play, AlertCircle
 } from 'lucide-react'
-import { useTechLevel } from '@/lib/context/tech-level-context'
+import { useTechLevel, toTitleCase } from '@/lib/context/tech-level-context'
 import { TooltipTerm } from '@/components/ui/tooltip-term'
 
 interface ComparisonSummary {
@@ -209,7 +209,7 @@ export default function ComparisonPage() {
           </div>
           <div className="border border-border rounded-lg p-4 text-center">
             <p className="text-3xl font-bold text-muted-foreground">{data.summary.avgBaselineScore}</p>
-            <p className="text-xs text-muted-foreground mt-1">Avg {terms.baseline} Score</p>
+            <p className="text-xs text-muted-foreground mt-1">Avg {toTitleCase(terms.baseline)} Score</p>
           </div>
         </div>
       )}
