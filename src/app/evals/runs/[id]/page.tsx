@@ -96,7 +96,7 @@ export default function EvalRunDetailPage() {
   const [rerunning, setRerunning] = useState(false)
   const [selectedFailedRuns, setSelectedFailedRuns] = useState<Set<string>>(new Set())
   const [promoting, setPromoting] = useState(false)
-  const ratingClickInProgress = useRef(false)
+  const ratingClickCaseRunId = useRef<string | null>(null)
 
   const loadRun = useCallback(async () => {
     const res = await fetch(`/api/eval-runs/${runId}`)
@@ -649,7 +649,7 @@ export default function EvalRunDetailPage() {
                         <p className="text-xs font-semibold text-muted-foreground mb-2">Human Feedback</p>
                         <div className="flex items-center gap-3">
                           <button
-                            onMouseDown={() => { ratingClickInProgress.current = true }}
+                            onMouseDown={() => { ratingClickCaseRunId.current = cr.id }}
                             onClick={() => {
                               const newRating = currentFeedback.rating === 'good' ? null : 'good'
                               setFeedbackState(prev => ({ ...prev, [cr.id]: { ...currentFeedback, rating: newRating } }))
@@ -658,7 +658,7 @@ export default function EvalRunDetailPage() {
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ caseRunId: cr.id, rating: newRating, comment: currentFeedback.comment }),
                               })
-                              ratingClickInProgress.current = false
+                              ratingClickCaseRunId.current = null
                             }}
                             className={`flex items-center gap-1 px-2 py-1 rounded border text-sm ${
                               currentFeedback.rating === 'good'
@@ -669,7 +669,7 @@ export default function EvalRunDetailPage() {
                             <ThumbsUp className="h-3.5 w-3.5" /> Good
                           </button>
                           <button
-                            onMouseDown={() => { ratingClickInProgress.current = true }}
+                            onMouseDown={() => { ratingClickCaseRunId.current = cr.id }}
                             onClick={() => {
                               const newRating = currentFeedback.rating === 'bad' ? null : 'bad'
                               setFeedbackState(prev => ({ ...prev, [cr.id]: { ...currentFeedback, rating: newRating } }))
@@ -678,7 +678,7 @@ export default function EvalRunDetailPage() {
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ caseRunId: cr.id, rating: newRating, comment: currentFeedback.comment }),
                               })
-                              ratingClickInProgress.current = false
+                              ratingClickCaseRunId.current = null
                             }}
                             className={`flex items-center gap-1 px-2 py-1 rounded border text-sm ${
                               currentFeedback.rating === 'bad'
@@ -694,9 +694,10 @@ export default function EvalRunDetailPage() {
                             value={currentFeedback.comment}
                             onChange={e => setFeedbackState(prev => ({ ...prev, [cr.id]: { ...currentFeedback, comment: e.target.value } }))}
                             onBlur={() => {
-                              // Skip POST if blur was caused by clicking a rating button —
-                              // the rating onClick already sends the correct state
-                              if (ratingClickInProgress.current) return
+                              // Skip POST if blur was caused by clicking a rating button
+                              // for THIS case run — the rating onClick already sends the correct state.
+                              // If blur was caused by a rating click on a DIFFERENT case run, save this one.
+                              if (ratingClickCaseRunId.current === cr.id) return
                               fetch(`/api/eval-runs/${runId}/feedback`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },

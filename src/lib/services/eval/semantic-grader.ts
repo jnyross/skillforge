@@ -163,15 +163,25 @@ export function detectProgrammaticAssertion(
   }
 
   // String contains detection — "should contain X", "must include X", "mentions X"
-  // Use original strings for extraction to preserve case in captured values
+  // Only use programmatic check when the assertion is simple enough that the literal
+  // match captures the full intent. If the criterion has significant additional context
+  // beyond the matched string, fall back to semantic grading to avoid false passes.
   const containsMatch = assertion.description.match(/(?:should |must |needs to )?(?:contain|include|mention|have)\s+["']([^"']+)["']/i)
     || assertion.criterion.match(/(?:should |must |needs to )?(?:contain|include|mention|have)\s+["']([^"']+)["']/i)
   if (containsMatch) {
     const needle = containsMatch[1]
-    return {
-      type: 'contains',
-      expected: needle,
-      script: `const r = process.env.EVAL_RESULT || ''; const n = ${JSON.stringify(needle)}; const found = r.toLowerCase().includes(n.toLowerCase()); console.log(JSON.stringify({ passed: found, evidence: found ? 'Output contains "' + n + '"' : 'Output does not contain "' + n + '"' }))`,
+    // Complexity guard: if the criterion is much longer than the matched portion,
+    // the assertion has nuances that a simple string.includes() would miss
+    const matchedLength = containsMatch[0].length
+    const criterionLength = assertion.criterion.length
+    const descriptionLength = assertion.description.length
+    const isSimple = criterionLength <= matchedLength * 2 && descriptionLength <= matchedLength * 2
+    if (isSimple) {
+      return {
+        type: 'contains',
+        expected: needle,
+        script: `const r = process.env.EVAL_RESULT || ''; const n = ${JSON.stringify(needle)}; const found = r.toLowerCase().includes(n.toLowerCase()); console.log(JSON.stringify({ passed: found, evidence: found ? 'Output contains "' + n + '"' : 'Output does not contain "' + n + '"' }))`,
+      }
     }
   }
 
@@ -190,14 +200,21 @@ export function detectProgrammaticAssertion(
 
   // File existence detection — "file X should exist", "creates file X"
   // Use original strings to preserve case in file paths (important on case-sensitive filesystems)
+  // Only match when the assertion is primarily about file existence, not a broader criterion
   const fileMatch = assertion.description.match(/(?:file|creates?)\s+["']?([^\s"']+)["']?\s+(?:should |must )?exist/i)
     || assertion.criterion.match(/(?:file|creates?)\s+["']?([^\s"']+)["']?\s+(?:should |must )?exist/i)
   if (fileMatch) {
     const filePath = fileMatch[1]
-    return {
-      type: 'file_exists',
-      target: filePath,
-      script: `const fs = require('fs'); const path = require('path'); const ws = process.env.EVAL_WORKSPACE || '.'; const fp = path.resolve(ws, ${JSON.stringify(filePath)}); if (!fp.startsWith(path.resolve(ws) + path.sep) && fp !== path.resolve(ws)) { console.log(JSON.stringify({ passed: false, evidence: 'Path traversal detected' })) } else { const exists = fs.existsSync(fp); console.log(JSON.stringify({ passed: exists, evidence: exists ? 'File exists: ' + fp : 'File not found: ' + fp })) }`,
+    // Complexity guard: only use programmatic check if the assertion is simple
+    const matchedLength = fileMatch[0].length
+    const criterionLength = assertion.criterion.length
+    const isSimple = criterionLength <= matchedLength * 2
+    if (isSimple) {
+      return {
+        type: 'file_exists',
+        target: filePath,
+        script: `const fs = require('fs'); const path = require('path'); const ws = process.env.EVAL_WORKSPACE || '.'; const fp = path.resolve(ws, ${JSON.stringify(filePath)}); if (!fp.startsWith(path.resolve(ws) + path.sep) && fp !== path.resolve(ws)) { console.log(JSON.stringify({ passed: false, evidence: 'Path traversal detected' })) } else { const exists = fs.existsSync(fp); console.log(JSON.stringify({ passed: exists, evidence: exists ? 'File exists: ' + fp : 'File not found: ' + fp })) }`,
+      }
     }
   }
 
