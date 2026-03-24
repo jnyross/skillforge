@@ -44,6 +44,10 @@ export async function POST(
     model?: string
     effort?: string
     maxTurns?: number
+    /** Iteration mode: 'quick' (3 cases, default) or 'thorough' (all output cases) */
+    mode?: 'quick' | 'thorough'
+    /** Human feedback from output viewer to pass to analyzer */
+    humanFeedback?: string[]
   }
 
   if (!body.evalSuiteId) {
@@ -126,6 +130,8 @@ export async function POST(
     skillVersionId: versionId,
     evalSuiteId: body.evalSuiteId,
     executorConfig,
+    mode: body.mode,
+    humanFeedback: body.humanFeedback,
   })
 
   return NextResponse.json(
@@ -150,6 +156,8 @@ async function runIterationInBackground(
     skillVersionId: string
     evalSuiteId: string
     executorConfig: ExecutorConfig
+    mode?: 'quick' | 'thorough'
+    humanFeedback?: string[]
   }
 ) {
   try {

@@ -29,6 +29,10 @@ export interface IterationInput {
   executorConfig: ExecutorConfig
   /** Pre-created iteration ID (from route handler). If provided, uses this record instead of creating a new one. */
   iterationId?: string
+  /** Iteration mode: 'quick' uses 3 cases for comparison (default), 'thorough' uses all output cases */
+  mode?: 'quick' | 'thorough'
+  /** Human feedback from output viewer, passed to analyzer for improvement suggestions */
+  humanFeedback?: string[]
 }
 
 export interface IterationResult {
@@ -130,13 +134,14 @@ export async function runIteration(input: IterationInput): Promise<IterationResu
 
     let skillWinRate: number | null = null
     let avgDelta: number | null = null
-    const comparisonResults: Array<{ winner: string; delta: number }> = []
+    const comparisonResults: Array<{ winner: string; delta: number; skillScore: number; baselineScore: number }> = []
     // Track which case runs were actually used for comparison (Bug fix: avoid mismatch with outputCaseRuns[0])
     const comparedCaseRuns: typeof outputCaseRuns = []
 
     if (outputCaseRuns.length > 0) {
-      // Run baseline and comparison on up to 3 cases (to save cost)
-      const casesToCompare = outputCaseRuns.slice(0, 3)
+      // In 'thorough' mode, compare all output cases. In 'quick' mode (default), compare up to 3.
+      const maxCases = input.mode === 'thorough' ? outputCaseRuns.length : 3
+      const casesToCompare = outputCaseRuns.slice(0, maxCases)
 
       for (const caseRun of casesToCompare) {
         try {
@@ -166,9 +171,21 @@ export async function runIteration(input: IterationInput): Promise<IterationResu
             skillIsA,
           })
 
+          // Capture actual rubric scores from the blind comparator result.
+          // The comparator already unblinds via skillIsA, so we read from the
+          // rubric using the same flag to get the correct skill/baseline scores.
+          const actualSkillScore = skillIsA
+            ? comparison.rubric.A.overall_score
+            : comparison.rubric.B.overall_score
+          const actualBaselineScore = skillIsA
+            ? comparison.rubric.B.overall_score
+            : comparison.rubric.A.overall_score
+
           comparisonResults.push({
             winner: comparison.winnerLabel,
             delta: comparison.delta,
+            skillScore: actualSkillScore || (5 + comparison.delta / 2),
+            baselineScore: actualBaselineScore || (5 - comparison.delta / 2),
           })
           comparedCaseRuns.push(caseRun)
 
@@ -233,7 +250,6 @@ export async function runIteration(input: IterationInput): Promise<IterationResu
       const skillOutputJson = firstCaseRun.outputJson
         ? JSON.parse(firstCaseRun.outputJson) as { result?: string }
         : null
-      const firstComparison = comparisonResults[0]
 
       // Get baseline output for analysis
       const reloadedCaseRun = await prisma.evalCaseRun.findUnique({
@@ -244,18 +260,51 @@ export async function runIteration(input: IterationInput): Promise<IterationResu
         ? JSON.parse(reloadedCaseRun.baselineOutputJson) as { result?: string }
         : null
 
+      // Compute aggregate scores from actual rubric scores (not synthesized)
+      const avgSkillScore = comparisonResults.reduce((s, r) => s + r.skillScore, 0) / comparisonResults.length
+      const avgBaselineScore = comparisonResults.reduce((s, r) => s + r.baselineScore, 0) / comparisonResults.length
+
+      // Build additional case data for multi-case analysis
+      const additionalCases: Array<{
+        evalPrompt: string
+        skillOutput: string
+        baselineOutput: string
+        comparison: { winner: string; delta: number }
+      }> = []
+
+      for (let i = 1; i < comparedCaseRuns.length; i++) {
+        const cr = comparedCaseRuns[i]
+        const crOutputJson = cr.outputJson ? JSON.parse(cr.outputJson) as { result?: string } : null
+        const crReloaded = await prisma.evalCaseRun.findUnique({
+          where: { id: cr.id },
+          select: { baselineOutputJson: true },
+        })
+        const crBaselineJson = crReloaded?.baselineOutputJson
+          ? JSON.parse(crReloaded.baselineOutputJson) as { result?: string }
+          : null
+
+        additionalCases.push({
+          evalPrompt: cr.evalCase.prompt,
+          skillOutput: crOutputJson?.result || '',
+          baselineOutput: crBaselineJson?.result || '',
+          comparison: { winner: comparisonResults[i].winner, delta: comparisonResults[i].delta },
+        })
+      }
+
       analysis = await analyzeComparison({
         comparisonResult: {
           winner: (() => { const sw = comparisonResults.filter(r => r.winner === 'skill').length; const bw = comparisonResults.filter(r => r.winner === 'baseline').length; return sw > bw ? 'skill' : bw > sw ? 'baseline' : 'TIE'; })(),
           reasoning: `Skill win rate: ${((skillWinRate ?? 0) * 100).toFixed(0)}%, avg delta: ${(avgDelta ?? 0).toFixed(2)}`,
-          skillScore: Math.max(1, Math.min(10, 5 + (avgDelta ?? 0) / 2)),
-          baselineScore: Math.max(1, Math.min(10, 5 - (avgDelta ?? 0) / 2)),
+          skillScore: avgSkillScore,
+          baselineScore: avgBaselineScore,
           delta: avgDelta ?? 0,
         },
         skillContent,
         skillOutput: skillOutputJson?.result || '',
         baselineOutput: baselineJson?.result || '',
         evalPrompt: firstCaseRun.evalCase.prompt,
+        humanFeedback: input.humanFeedback,
+        additionalCases: additionalCases.length > 0 ? additionalCases : undefined,
       })
     } else {
       // No comparisons available — generate analysis from eval results only

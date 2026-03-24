@@ -83,6 +83,15 @@ export interface AnalyzerInput {
   baselineOutput: string
   /** The eval prompt that was used */
   evalPrompt: string
+  /** Human feedback from output viewer, surfaced as context for suggestions */
+  humanFeedback?: string[]
+  /** Additional case comparison results for multi-case analysis */
+  additionalCases?: Array<{
+    evalPrompt: string
+    skillOutput: string
+    baselineOutput: string
+    comparison: { winner: string; delta: number }
+  }>
 }
 
 // --- Main ---
@@ -138,14 +147,32 @@ ${input.evalPrompt}
 
 **Skill Output (produced WITH the skill installed):**
 \`\`\`
-${input.skillOutput.slice(0, 6000)}
+${input.skillOutput.slice(0, 15000)}
 \`\`\`
 
 **Baseline Output (produced WITHOUT any skill):**
 \`\`\`
-${input.baselineOutput.slice(0, 6000)}
+${input.baselineOutput.slice(0, 15000)}
 \`\`\`
+${input.humanFeedback && input.humanFeedback.length > 0 ? `
+### Human Feedback
+The following feedback was provided by a human reviewer on the skill output:
+${input.humanFeedback.map((f, i) => `${i + 1}. ${f}`).join('\n')}
 
+IMPORTANT: Incorporate this human feedback into your analysis. If reviewers flagged specific issues, prioritize suggestions that address them.
+` : ''}
+${input.additionalCases && input.additionalCases.length > 0 ? `
+### Additional Comparison Cases
+The following additional eval cases were also compared:
+${input.additionalCases.map((c, i) => `
+**Case ${i + 2}:**
+- Eval Prompt: ${c.evalPrompt.slice(0, 500)}
+- Winner: ${c.comparison.winner}, Delta: ${c.comparison.delta.toFixed(2)}
+- Skill Output (excerpt): ${c.skillOutput.slice(0, 2000)}
+- Baseline Output (excerpt): ${c.baselineOutput.slice(0, 2000)}
+`).join('')}
+Consider patterns across ALL cases, not just the primary one.
+` : ''}
 ### Steps 4-8: Analyze and Generate Results
 
 Now follow steps 4-8:
