@@ -7,6 +7,7 @@ import {
   ChevronLeft, Trophy, Scale, TrendingUp, TrendingDown,
   Minus, Loader2, Play, AlertCircle
 } from 'lucide-react'
+import { useTechLevel } from '@/lib/context/tech-level-context'
 
 interface ComparisonSummary {
   totalComparisons: number
@@ -64,6 +65,7 @@ interface ComparisonData {
 export default function ComparisonPage() {
   const params = useParams()
   const runId = params.id as string
+  const { terms } = useTechLevel()
 
   const [data, setData] = useState<ComparisonData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -192,21 +194,21 @@ export default function ComparisonPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="border border-border rounded-lg p-4 text-center">
             <p className="text-3xl font-bold text-green-400">{data.summary.skillWinRate}%</p>
-            <p className="text-xs text-muted-foreground mt-1">Skill Win Rate</p>
+            <p className="text-xs text-muted-foreground mt-1">{terms.blindComparison} Win Rate</p>
           </div>
           <div className="border border-border rounded-lg p-4 text-center">
             <p className={`text-3xl font-bold ${deltaColor(data.summary.avgDelta)}`}>
               {data.summary.avgDelta > 0 ? '+' : ''}{data.summary.avgDelta}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">Avg Score Delta</p>
+            <p className="text-xs text-muted-foreground mt-1">Avg {terms.delta}</p>
           </div>
           <div className="border border-border rounded-lg p-4 text-center">
             <p className="text-3xl font-bold">{data.summary.avgSkillScore}</p>
-            <p className="text-xs text-muted-foreground mt-1">Avg Skill Score</p>
+            <p className="text-xs text-muted-foreground mt-1">Avg {terms.skillTerm} Score</p>
           </div>
           <div className="border border-border rounded-lg p-4 text-center">
             <p className="text-3xl font-bold text-muted-foreground">{data.summary.avgBaselineScore}</p>
-            <p className="text-xs text-muted-foreground mt-1">Avg Baseline Score</p>
+            <p className="text-xs text-muted-foreground mt-1">Avg {terms.baseline} Score</p>
           </div>
         </div>
       )}

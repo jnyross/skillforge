@@ -7,6 +7,7 @@ import {
   ChevronLeft, Play, Loader2, CheckCircle, XCircle,
   Zap, TrendingUp, ArrowRight, Trophy, RotateCcw,
 } from 'lucide-react'
+import { useTechLevel } from '@/lib/context/tech-level-context'
 
 interface TriggerQuery {
   query: string
@@ -54,6 +55,7 @@ interface OptimizationRun {
 export default function TriggerOptimizerPage() {
   const params = useParams()
   const repoId = params.id as string
+  const { terms } = useTechLevel()
 
   const [runs, setRuns] = useState<OptimizationRun[]>([])
   const [loading, setLoading] = useState(true)
@@ -189,7 +191,7 @@ export default function TriggerOptimizerPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Zap className="h-6 w-6 text-yellow-400" />
-            <h1 className="text-2xl font-bold">Trigger Description Optimizer</h1>
+            <h1 className="text-2xl font-bold">{terms.triggerDescription} Optimizer</h1>
           </div>
           <button
             onClick={handleStart}
@@ -264,13 +266,13 @@ export default function TriggerOptimizerPage() {
                   <p className={`text-3xl font-bold ${scoreColor(selectedRun.bestTestScore)}`}>
                     {(selectedRun.bestTestScore * 100).toFixed(0)}%
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">Best Test Score</p>
+                  <p className="text-xs text-muted-foreground mt-1">Best {terms.testSplit} Score</p>
                 </div>
                 <div className="border border-border rounded-lg p-4 text-center">
                   <p className={`text-3xl font-bold ${scoreColor(selectedRun.bestTrainScore)}`}>
                     {(selectedRun.bestTrainScore * 100).toFixed(0)}%
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">Best Train Score</p>
+                  <p className="text-xs text-muted-foreground mt-1">Best {terms.trainSplit} Score</p>
                 </div>
                 <div className="border border-border rounded-lg p-4 text-center">
                   <p className="text-3xl font-bold text-foreground">
@@ -282,7 +284,7 @@ export default function TriggerOptimizerPage() {
                   <p className="text-3xl font-bold text-foreground">
                     {queries.length}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">Eval Queries</p>
+                  <p className="text-xs text-muted-foreground mt-1">{terms.evalCase}s</p>
                 </div>
               </div>
 
