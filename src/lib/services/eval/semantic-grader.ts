@@ -153,8 +153,8 @@ export function detectProgrammaticAssertion(
 
   // JSON validity detection
   if (
-    /valid json/i.test(descLower) || /valid json/i.test(criterionLower) ||
-    /returns?\s+json/i.test(descLower) || /parseable?\s+json/i.test(descLower)
+    /\bvalid json\b/i.test(descLower) || /\bvalid json\b/i.test(criterionLower) ||
+    /\breturns?\s+json\b/i.test(descLower) || /\bparseable?\s+json\b/i.test(descLower)
   ) {
     return {
       type: 'json_valid',
@@ -171,7 +171,7 @@ export function detectProgrammaticAssertion(
     return {
       type: 'contains',
       expected: needle,
-      script: `const r = process.env.EVAL_RESULT || ''; const n = ${JSON.stringify(needle)}; console.log(JSON.stringify({ passed: r.toLowerCase().includes(n.toLowerCase()), evidence: r.includes(n) ? 'Output contains "' + n + '"' : 'Output does not contain "' + n + '"' }))`,
+      script: `const r = process.env.EVAL_RESULT || ''; const n = ${JSON.stringify(needle)}; const found = r.toLowerCase().includes(n.toLowerCase()); console.log(JSON.stringify({ passed: found, evidence: found ? 'Output contains "' + n + '"' : 'Output does not contain "' + n + '"' }))`,
     }
   }
 
