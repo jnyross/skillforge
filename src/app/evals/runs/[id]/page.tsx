@@ -7,7 +7,7 @@ import {
   ChevronLeft, CheckCircle, XCircle, Clock, AlertCircle,
   Loader2, Activity, BarChart3, RotateCcw, ArrowUpRight, Scale
 } from 'lucide-react'
-import { useTechLevel } from '@/lib/context/tech-level-context'
+import { useTechLevel, toTitleCase } from '@/lib/context/tech-level-context'
 
 interface EvalRunDetail {
   id: string
@@ -257,7 +257,7 @@ export default function EvalRunDetailPage() {
       {/* Tabs */}
       <div className="flex gap-4 border-b border-border">
         <button onClick={() => setTab('results')} className={`pb-2 text-sm font-medium border-b-2 ${tab === 'results' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
-          {terms.evalCase} Results ({run.caseRuns.length})
+          {toTitleCase(terms.evalCase)} Results ({run.caseRuns.length})
         </button>
         <button onClick={() => setTab('metrics')} className={`pb-2 text-sm font-medium border-b-2 ${tab === 'metrics' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
           <BarChart3 className="h-4 w-4 inline mr-1" /> Metrics

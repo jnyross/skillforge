@@ -7,7 +7,7 @@ import {
   ChevronLeft, Play, Loader2, CheckCircle, XCircle,
   Zap, TrendingUp, ArrowRight, Trophy, RotateCcw,
 } from 'lucide-react'
-import { useTechLevel } from '@/lib/context/tech-level-context'
+import { useTechLevel, toTitleCase } from '@/lib/context/tech-level-context'
 
 interface TriggerQuery {
   query: string
@@ -191,7 +191,7 @@ export default function TriggerOptimizerPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Zap className="h-6 w-6 text-yellow-400" />
-            <h1 className="text-2xl font-bold">{terms.triggerDescription.charAt(0).toUpperCase() + terms.triggerDescription.slice(1)} Optimizer</h1>
+            <h1 className="text-2xl font-bold">{toTitleCase(terms.triggerDescription)} Optimizer</h1>
           </div>
           <button
             onClick={handleStart}

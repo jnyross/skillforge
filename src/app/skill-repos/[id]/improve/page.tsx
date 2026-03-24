@@ -8,7 +8,7 @@ import {
   TrendingUp, ArrowRight, Lightbulb, Check, X,
   BarChart3, GitBranch,
 } from 'lucide-react'
-import { useTechLevel } from '@/lib/context/tech-level-context'
+import { useTechLevel, toTitleCase } from '@/lib/context/tech-level-context'
 
 // --- Types ---
 
@@ -642,7 +642,7 @@ export default function ImprovePage() {
                 <div className="flex items-center gap-2">
                   <ArrowRight className="h-4 w-4" />
                   <span className="text-sm font-semibold">
-                    {terms.suggestion}s ({acceptedIndices.size}/{suggestions.length} selected)
+                    {toTitleCase(terms.suggestion)}s ({acceptedIndices.size}/{suggestions.length} selected)
                   </span>
                 </div>
                 <div className="flex items-center gap-2">

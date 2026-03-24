@@ -168,4 +168,9 @@ export function useTechLevel(): TechLevelContextValue {
   return useContext(TechLevelContext)
 }
 
+/** Capitalize the first letter of each word — use for adaptive terms in headings/tab labels. */
+export function toTitleCase(s: string): string {
+  return s.replace(/\b\w/g, c => c.toUpperCase())
+}
+
 export type { AdaptiveTerms }
