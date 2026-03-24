@@ -151,6 +151,7 @@ export async function generateSkillFromWizard(input: WizardInput): Promise<Gener
 
     // ── Phase 0: Initial generation (up to 2 retries for Phase 1 failures) ──
     let result: GeneratedSkill | null = null
+    let bestResult: GeneratedSkill | null = null
     let qualityFeedback = ''
     const MAX_PHASE1_RETRIES = 2
 
@@ -172,6 +173,11 @@ export async function generateSkillFromWizard(input: WizardInput): Promise<Gener
       result.qualityScore = qualityCheck.score
       result.qualityIssues = qualityCheck.issues.map(i => `[${i.severity.toUpperCase()}] ${i.message}`)
 
+      // Track the best result across all attempts
+      if (!bestResult || (result.qualityScore || 0) > (bestResult.qualityScore || 0)) {
+        bestResult = result
+      }
+
       if (qualityCheck.passed) {
         break // Passed Phase 1, proceed to Phase 2
       }
@@ -184,6 +190,9 @@ export async function generateSkillFromWizard(input: WizardInput): Promise<Gener
         result.warnings.push(`Phase 1 quality check failed after ${MAX_PHASE1_RETRIES + 1} attempts. Proceeding with best result.`)
       }
     }
+
+    // Use the best result from all Phase 1 attempts
+    result = bestResult
 
     if (!result) {
       return mockGenerate(input)

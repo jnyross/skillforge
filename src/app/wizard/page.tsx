@@ -364,6 +364,11 @@ export default function WizardPage() {
           outputSuite: evals.outputSuite || { name: '', type: 'output', cases: [] },
           smokePlan: evals.smokePlan || '',
           warnings: evals.warnings || [],
+          // Restore quality gate fields (PR 2)
+          qualityScore: evals.qualityScore,
+          qualityIssues: evals.qualityIssues,
+          reviewScore: evals.reviewScore,
+          reviewFeedback: evals.reviewFeedback,
         })
         setEditedSkillMd(data.generatedSkill)
         // Also restore concreteExamples and freedomLevel so "Back to Edit" has them
