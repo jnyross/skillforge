@@ -195,7 +195,7 @@ export default function ComparisonPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="border border-border rounded-lg p-4 text-center">
             <p className="text-3xl font-bold text-green-400">{data.summary.skillWinRate}%</p>
-            <p className="text-xs text-muted-foreground mt-1">{terms.skillTerm} Win Rate</p>
+            <p className="text-xs text-muted-foreground mt-1">Skill Win Rate</p>
           </div>
           <div className="border border-border rounded-lg p-4 text-center">
             <p className={`text-3xl font-bold ${deltaColor(data.summary.avgDelta)}`}>
@@ -205,7 +205,7 @@ export default function ComparisonPage() {
           </div>
           <div className="border border-border rounded-lg p-4 text-center">
             <p className="text-3xl font-bold">{data.summary.avgSkillScore}</p>
-            <p className="text-xs text-muted-foreground mt-1">Avg {terms.skillTerm} Score</p>
+            <p className="text-xs text-muted-foreground mt-1">Avg Skill Score</p>
           </div>
           <div className="border border-border rounded-lg p-4 text-center">
             <p className="text-3xl font-bold text-muted-foreground">{data.summary.avgBaselineScore}</p>

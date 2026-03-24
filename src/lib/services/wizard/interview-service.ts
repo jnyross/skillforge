@@ -531,10 +531,15 @@ IMPORTANT: Respond ONLY with valid JSON. No markdown, no extra text.`
           followUpReason: parsed.followUpReason,
         }
 
-        // Update or add extracted answer
+        // Update or add extracted answer — but don't overwrite high-confidence
+        // pre-extractions from extractFromContext
         const existingIdx = context.extractedAnswers.findIndex(a => a.questionKey === currentQuestion)
         if (existingIdx >= 0) {
-          context.extractedAnswers[existingIdx] = extractedAnswer
+          const existing = context.extractedAnswers[existingIdx]
+          // Only overwrite if the existing answer isn't already high-confidence
+          if (existing.confidence !== 'high' || confidence === 'high') {
+            context.extractedAnswers[existingIdx] = extractedAnswer
+          }
         } else {
           context.extractedAnswers.push(extractedAnswer)
         }
