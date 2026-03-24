@@ -139,12 +139,18 @@ export default function WizardPage() {
   }
 
   // Handle interview completion — extract answers and trigger generation
-  const handleInterviewComplete = (ctx: InterviewContext) => {
+  const handleInterviewComplete = (ctx: InterviewContext, advancedOptions?: { corrections: string; safetyConstraints: string; allowedTools: string }) => {
     setInterviewContext(ctx)
     const wizardInput = interviewAnswersToWizardInput(ctx)
     setIntent(wizardInput.intent)
     setConcreteExamples(wizardInput.concreteExamples)
     if (wizardInput.desiredOutputFormat) setDesiredOutputFormat(wizardInput.desiredOutputFormat)
+    // Propagate advanced options from ConversationalIntake to page-level state
+    if (advancedOptions) {
+      if (advancedOptions.corrections) setCorrections(advancedOptions.corrections)
+      if (advancedOptions.safetyConstraints) setSafetyConstraints(advancedOptions.safetyConstraints)
+      if (advancedOptions.allowedTools) setAllowedTools(advancedOptions.allowedTools)
+    }
     // Now trigger generation
     handleGenerateFromInterview(ctx)
   }

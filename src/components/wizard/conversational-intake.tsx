@@ -12,7 +12,7 @@ import { INTERVIEW_QUESTIONS, getQuestionNumber, getTotalQuestions } from '@/lib
 
 interface ConversationalIntakeProps {
   mode: string
-  onComplete: (context: InterviewContext) => void
+  onComplete: (context: InterviewContext, advancedOptions?: { corrections: string; safetyConstraints: string; allowedTools: string }) => void
   initialContext?: InterviewContext | null
 }
 
@@ -130,7 +130,7 @@ export function ConversationalIntake({ mode, onComplete, initialContext }: Conve
     const finalContext: InterviewContext = {
       ...context,
       // Store advanced options in a message so they're preserved in transcript
-      messages: showAdvanced && (corrections || safetyConstraints || allowedTools)
+      messages: (corrections || safetyConstraints || allowedTools)
         ? [
             ...context.messages,
             {
@@ -141,7 +141,11 @@ export function ConversationalIntake({ mode, onComplete, initialContext }: Conve
           ]
         : context.messages,
     }
-    onComplete(finalContext)
+    onComplete(finalContext, {
+      corrections,
+      safetyConstraints,
+      allowedTools,
+    })
   }
 
   const isConfirming = context?.state === 'confirm' || context?.state === 'done'
