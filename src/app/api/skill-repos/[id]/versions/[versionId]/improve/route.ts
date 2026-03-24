@@ -62,7 +62,7 @@ export async function POST(
   }
 
   const version = await prisma.skillVersion.findUnique({
-    where: { id: versionId },
+    where: { id: versionId, skillRepoId },
   })
   if (!version) {
     return NextResponse.json({ error: 'Version not found' }, { status: 404 })
