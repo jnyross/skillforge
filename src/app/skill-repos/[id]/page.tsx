@@ -790,7 +790,7 @@ export default function SkillRepoPage() {
                     <div className="space-y-4">
                       <Card>
                         <CardHeader className="pb-3">
-                          <CardTitle className="text-base">{terms.skillVersion} Info</CardTitle>
+                          <CardTitle className="text-base">{terms.skillVersion.charAt(0).toUpperCase() + terms.skillVersion.slice(1)} Info</CardTitle>
                         </CardHeader>
                         <CardContent>
                           <div className="grid grid-cols-2 gap-4">
