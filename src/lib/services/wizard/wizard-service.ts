@@ -17,6 +17,9 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk'
+import { SKILL_WRITING_PRINCIPLES, EXPERT_MODE_PROMPTS, GENERATION_INSTRUCTIONS } from './skill-writing-guide'
+import { validateSkillQuality, buildQualityFeedback } from './quality-validator'
+import { reviewSkillQuality, buildRegenerationFeedback } from './skill-reviewer'
 
 export type WizardMode = 'extract' | 'synthesize' | 'hybrid' | 'scratch'
 
@@ -56,6 +59,16 @@ export interface GeneratedSkill {
   outputSuite: GeneratedEvalSuite
   smokePlan: string
   warnings: string[]
+  // Quality gate results (PR 2)
+  qualityScore?: number
+  qualityIssues?: string[]
+  reviewScore?: number
+  reviewFeedback?: {
+    strengths: string[]
+    weaknesses: string[]
+    suggestions: string[]
+    reasoning: string
+  }
 }
 
 export interface GeneratedEvalSuite {
@@ -78,26 +91,14 @@ export interface GeneratedEvalCase {
 
 const SHARED_SYSTEM_RULES = `
 
-PROGRESSIVE DISCLOSURE RULES (mandatory):
-- The "description" frontmatter field MUST be ≤100 words. It is the ONLY thing always loaded into context.
+PROGRESSIVE DISCLOSURE RULES:
+- The "description" frontmatter field MUST be under 1024 characters. It is the ONLY thing always loaded into context.
 - The SKILL.md body MUST be <500 lines. If content exceeds this, split into references/ files.
-- Do NOT include README.md, CHANGELOG.md, or other user-facing docs. Skills are for AI agents.
 - Move variant-specific details, large examples, and lookup tables into references/ files.
-- Avoid deeply nested references (max 1 level of $ref).
 
-CONCISENESS RULES (mandatory):
-- Only include information the agent does NOT already have as general knowledge.
-- Challenge each piece of information: does the agent really need this to complete the task?
-- Write directives, not wisdom. Tell the agent WHAT to do, not WHY.
-- Cut general knowledge: remove definitions, framework lists, academic citations.
-- Convert warnings into concrete anti-pattern sections or checklist items.
-- Start with good defaults: simplest correct approach first, then edge cases.
+${SKILL_WRITING_PRINCIPLES}
 
-SKILL WRITING PRINCIPLES (mandatory):
-- Every sentence must help the agent complete its task. Remove organizational advice, process guidance.
-- Use imperative form: "Run X", "Check Y", "If Z then do W".
-- Be concrete: show exact file paths, command patterns, expected outputs.
-- Scope to the build task: no motivational text, no general software engineering advice.
+${GENERATION_INSTRUCTIONS}
 
 AVAILABLE DESIGN PATTERNS (use when appropriate):
 
@@ -136,30 +137,10 @@ const FREEDOM_LEVEL_INSTRUCTIONS: Record<FreedomLevel, string> = {
 }
 
 const MODE_SYSTEM_PROMPTS: Record<WizardMode, string> = {
-  extract: `You are SkillForge's skill creation wizard. The user wants to extract a reusable Claude Code skill from a successful hands-on task. Focus on:
-- Identifying the repeatable pattern from the conversation/task
-- Extracting the key decision points and steps
-- Capturing corrections as gotchas
-- Making the skill trigger on similar future requests`,
-
-  synthesize: `You are SkillForge's skill creation wizard. The user wants to synthesize a Claude Code skill from existing artifacts (docs, runbooks, APIs, schemas). Focus on:
-- Extracting the coherent unit of work from the artifacts
-- Identifying boundaries: when to trigger, when not to trigger
-- Translating documentation into actionable skill instructions
-- Preserving important details in references/ files`,
-
-  hybrid: `You are SkillForge's skill creation wizard. The user wants to combine task extraction with artifact synthesis. Focus on:
-- Using real task experience to ground the skill in practical behavior
-- Enriching with documentation and reference materials
-- Capturing both the "how it was done" and "how it should be done"
-- Building comprehensive trigger and output eval cases`,
-
-  scratch: `You are SkillForge's skill creation wizard. The user wants to create a skill from a description of intent. Focus on:
-- Understanding what the user wants the skill to accomplish
-- Designing clear triggering conditions
-- Writing specific, actionable instructions
-- Generating meaningful eval cases to test the skill
-WARNING: This skill is being generated without real artifacts. Flag that it should be grounded with real examples before serious use.`,
+  extract: EXPERT_MODE_PROMPTS.extract,
+  synthesize: EXPERT_MODE_PROMPTS.synthesize,
+  hybrid: EXPERT_MODE_PROMPTS.hybrid,
+  scratch: EXPERT_MODE_PROMPTS.scratch,
 }
 
 /**
@@ -174,25 +155,126 @@ export async function generateSkillFromWizard(input: WizardInput): Promise<Gener
 
   try {
     const client = new Anthropic({ apiKey })
-
     const systemPrompt = MODE_SYSTEM_PROMPTS[input.mode] + SHARED_SYSTEM_RULES + FREEDOM_LEVEL_INSTRUCTIONS[input.freedomLevel]
-    const userPrompt = buildGenerationPrompt(input)
 
-    const response = await client.messages.create({
-      model: 'claude-opus-4-6',
-      max_tokens: 8192,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userPrompt }],
-    })
+    // ── Phase 0: Initial generation (up to 2 retries for Phase 1 failures) ──
+    let result: GeneratedSkill | null = null
+    let bestResult: GeneratedSkill | null = null
+    let qualityFeedback = ''
+    const MAX_PHASE1_RETRIES = 2
 
-    const text = response.content[0].type === 'text' ? response.content[0].text : ''
-    return parseGenerationResponse(text, input)
+    for (let attempt = 0; attempt <= MAX_PHASE1_RETRIES; attempt++) {
+      const userPrompt = buildGenerationPrompt(input, qualityFeedback)
+
+      const response = await client.messages.create({
+        model: 'claude-opus-4-6',
+        max_tokens: 8192,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      })
+
+      const text = response.content[0].type === 'text' ? response.content[0].text : ''
+      result = parseGenerationResponse(text, input)
+
+      // ── Phase 1: Deterministic quality checks ──
+      const qualityCheck = validateSkillQuality(result.skillMd, input.intent)
+      result.qualityScore = qualityCheck.score
+      result.qualityIssues = qualityCheck.issues.map(i => `[${i.severity.toUpperCase()}] ${i.message}`)
+
+      // Track the best result across all attempts
+      if (!bestResult || (result.qualityScore || 0) > (bestResult.qualityScore || 0)) {
+        bestResult = result
+      }
+
+      if (qualityCheck.passed) {
+        bestResult = result // Always prefer a passing result over a higher-scoring failing one
+        break // Passed Phase 1, proceed to Phase 2
+      }
+
+      if (attempt < MAX_PHASE1_RETRIES) {
+        // Build feedback for retry
+        qualityFeedback = buildQualityFeedback(qualityCheck)
+        result.warnings.push(`Phase 1 quality check failed (attempt ${attempt + 1}). Retrying with feedback.`)
+      } else {
+        const failWarning = `Phase 1 quality check failed after ${MAX_PHASE1_RETRIES + 1} attempts. Proceeding with best result.`
+        result.warnings.push(failWarning)
+        if (bestResult && bestResult !== result) {
+          bestResult.warnings.push(failWarning)
+        }
+      }
+    }
+
+    // Use the best result from all Phase 1 attempts
+    result = bestResult
+
+    if (!result) {
+      return mockGenerate(input)
+    }
+
+    // ── Phase 2: LLM review pass ──
+    const review = await reviewSkillQuality(result.skillMd, input.intent, input.mode)
+    result.reviewScore = review.score
+    result.reviewFeedback = {
+      strengths: review.strengths,
+      weaknesses: review.weaknesses,
+      suggestions: review.suggestions,
+      reasoning: review.reasoning,
+    }
+
+    if (review.shouldRegenerate) {
+      try {
+        // One retry with LLM feedback
+        const regenerationFeedback = buildRegenerationFeedback(review)
+        const retryPrompt = buildGenerationPrompt(input, regenerationFeedback)
+
+        const retryResponse = await client.messages.create({
+          model: 'claude-opus-4-6',
+          max_tokens: 8192,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: retryPrompt }],
+        })
+
+        const retryText = retryResponse.content[0].type === 'text' ? retryResponse.content[0].text : ''
+        const retryResult = parseGenerationResponse(retryText, input)
+
+        // Re-validate and re-review
+        const retryQuality = validateSkillQuality(retryResult.skillMd, input.intent)
+        const retryReview = await reviewSkillQuality(retryResult.skillMd, input.intent, input.mode)
+
+        retryResult.qualityScore = retryQuality.score
+        retryResult.qualityIssues = retryQuality.issues.map(i => `[${i.severity.toUpperCase()}] ${i.message}`)
+        retryResult.reviewScore = retryReview.score
+        retryResult.reviewFeedback = {
+          strengths: retryReview.strengths,
+          weaknesses: retryReview.weaknesses,
+          suggestions: retryReview.suggestions,
+          reasoning: retryReview.reasoning,
+        }
+
+        // Use the better result — but only if retry also passes Phase 1 structural checks
+        const originalTotal = (result.qualityScore || 0) + (result.reviewScore || 0)
+        const retryTotal = (retryResult.qualityScore || 0) + (retryResult.reviewScore || 0)
+
+        if (retryTotal >= originalTotal && retryQuality.passed) {
+          retryResult.warnings.push('Regenerated after expert review feedback (improved).')
+          result = retryResult
+        } else if (retryTotal > originalTotal && !retryQuality.passed) {
+          result.warnings.push('Regeneration scored higher but failed structural checks — keeping original.')
+        } else {
+          result.warnings.push('Regeneration attempted but original was better.')
+        }
+      } catch {
+        result.warnings.push('Phase 2 retry generation failed — keeping original result.')
+      }
+    }
+
+    return result
   } catch {
     return mockGenerate(input)
   }
 }
 
-function buildGenerationPrompt(input: WizardInput): string {
+function buildGenerationPrompt(input: WizardInput, qualityFeedback?: string): string {
   let prompt = `## User Intent\n${input.intent}\n\n`
 
   // Concrete examples (Step 1 of Skill Creator methodology)
@@ -298,6 +380,10 @@ Requirements:
 - Include at least one warning if the skill was generated from scratch without artifacts
 - Respond ONLY with valid JSON`
 
+  if (qualityFeedback) {
+    prompt += `\n\n## IMPORTANT: Quality Feedback from Previous Attempt\n${qualityFeedback}`
+  }
+
   return prompt
 }
 
@@ -388,9 +474,9 @@ description: ${JSON.stringify(input.intent.slice(0, 200))}
 
 Based on the user's intent: "${input.intent}"
 
-1. Analyze the request
-2. Execute the task
-3. Verify the output
+1. Understand the user's specific requirements
+2. Plan the approach and carry it out step by step
+3. Check the output meets all stated requirements
 
 ## Gotchas
 - This is an auto-generated skill. Review and refine before production use.

@@ -30,6 +30,16 @@ interface GeneratedResult {
   }
   smokePlan: string
   warnings: string[]
+  // Quality gate results (PR 2)
+  qualityScore?: number
+  qualityIssues?: string[]
+  reviewScore?: number
+  reviewFeedback?: {
+    strengths: string[]
+    weaknesses: string[]
+    suggestions: string[]
+    reasoning: string
+  }
 }
 
 interface SaveResult {
@@ -471,6 +481,11 @@ export default function WizardPage() {
           outputSuite: evals.outputSuite || { name: '', type: 'output', cases: [] },
           smokePlan: evals.smokePlan || '',
           warnings: evals.warnings || [],
+          // Restore quality gate fields (PR 2)
+          qualityScore: evals.qualityScore,
+          qualityIssues: evals.qualityIssues,
+          reviewScore: evals.reviewScore,
+          reviewFeedback: evals.reviewFeedback,
         })
         setEditedSkillMd(data.generatedSkill)
         // Also restore concreteExamples and freedomLevel so "Back to Edit" has them
@@ -811,17 +826,36 @@ export default function WizardPage() {
           )}
 
           {/* Quality Metrics Panel */}
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
             <div className="border border-border rounded-lg p-3 bg-card">
-              <p className="text-xs text-muted-foreground">Description Words</p>
+              <p className="text-xs text-muted-foreground">Quality Gate</p>
+              <p className={`text-lg font-bold ${
+                (generated.qualityScore ?? 0) >= 8 ? 'text-green-400' :
+                (generated.qualityScore ?? 0) >= 6 ? 'text-amber-400' : 'text-red-400'
+              }`}>
+                {generated.qualityScore ?? 'N/A'}/10
+              </p>
+              <p className="text-xs text-muted-foreground">Structure</p>
+            </div>
+            <div className="border border-border rounded-lg p-3 bg-card">
+              <p className="text-xs text-muted-foreground">Expert Review</p>
+              <p className={`text-lg font-bold ${
+                (generated.reviewScore ?? 0) >= 8 ? 'text-green-400' :
+                (generated.reviewScore ?? 0) >= 6 ? 'text-amber-400' : 'text-red-400'
+              }`}>
+                {generated.reviewScore ?? 'N/A'}/10
+              </p>
+              <p className="text-xs text-muted-foreground">LLM Critic</p>
+            </div>
+            <div className="border border-border rounded-lg p-3 bg-card">
+              <p className="text-xs text-muted-foreground">Description</p>
               <p className="text-lg font-bold">
                 {(() => {
                   const descMatch = editedSkillMd.match(/^description:\s*(.+)$/m)
-                  const wordCount = descMatch ? descMatch[1].split(/\s+/).filter(Boolean).length : 0
-                  return wordCount
+                  return descMatch ? descMatch[1].trim().replace(/^["']|["']$/g, '').length : 0
                 })()}
               </p>
-              <p className="text-xs text-muted-foreground">Target: ≤100</p>
+              <p className="text-xs text-muted-foreground">Max 1024 chars</p>
             </div>
             <div className="border border-border rounded-lg p-3 bg-card">
               <p className="text-xs text-muted-foreground">Body Lines</p>
@@ -839,24 +873,72 @@ export default function WizardPage() {
                   <p className={`text-lg font-bold ${lintResults.errors > 0 ? 'text-red-400' : lintResults.warnings > 0 ? 'text-amber-400' : 'text-green-400'}`}>
                     {lintResults.errors > 0 ? `${lintResults.errors} errors` : lintResults.warnings > 0 ? `${lintResults.warnings} warns` : 'Clean'}
                   </p>
-                  {lintResults.details.length > 0 && (
-                    <details className="mt-1">
-                      <summary className="text-xs text-muted-foreground cursor-pointer">Details</summary>
-                      <ul className="text-xs mt-1 space-y-0.5">
-                        {lintResults.details.map((d, i) => (
-                          <li key={i} className={d.severity === 'error' ? 'text-red-400' : d.severity === 'warning' ? 'text-amber-400' : 'text-muted-foreground'}>
-                            [{d.severity}] {d.message}
-                          </li>
-                        ))}
-                      </ul>
-                    </details>
-                  )}
                 </>
               ) : (
                 <p className="text-sm text-muted-foreground">N/A</p>
               )}
             </div>
           </div>
+
+          {/* Expert Review Feedback */}
+          {generated.reviewFeedback && (
+            <details className="border border-border rounded-lg">
+              <summary className="px-4 py-3 text-sm font-medium cursor-pointer hover:bg-accent/50 rounded-lg flex items-center gap-2">
+                Expert Review Feedback (Score: {generated.reviewScore}/10)
+              </summary>
+              <div className="px-4 pb-4 space-y-3">
+                {generated.reviewFeedback.strengths.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-green-400 mb-1">Strengths</p>
+                    <ul className="text-xs text-muted-foreground space-y-0.5">
+                      {generated.reviewFeedback.strengths.map((s, i) => (
+                        <li key={i}>+ {s}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {generated.reviewFeedback.weaknesses.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-amber-400 mb-1">Weaknesses</p>
+                    <ul className="text-xs text-muted-foreground space-y-0.5">
+                      {generated.reviewFeedback.weaknesses.map((w, i) => (
+                        <li key={i}>- {w}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {generated.reviewFeedback.suggestions.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-blue-400 mb-1">Suggestions</p>
+                    <ul className="text-xs text-muted-foreground space-y-0.5">
+                      {generated.reviewFeedback.suggestions.map((s, i) => (
+                        <li key={i}>* {s}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground italic">{generated.reviewFeedback.reasoning}</p>
+              </div>
+            </details>
+          )}
+
+          {/* Quality Issues */}
+          {generated.qualityIssues && generated.qualityIssues.length > 0 && (
+            <details className="border border-border rounded-lg">
+              <summary className="px-4 py-3 text-sm font-medium cursor-pointer hover:bg-accent/50 rounded-lg flex items-center gap-2">
+                Quality Gate Issues ({generated.qualityIssues.length})
+              </summary>
+              <div className="px-4 pb-4">
+                <ul className="text-xs text-muted-foreground space-y-0.5">
+                  {generated.qualityIssues.map((issue, i) => (
+                    <li key={i} className={issue.startsWith('[ERROR]') ? 'text-red-400' : 'text-amber-400'}>
+                      {issue}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </details>
+          )}
 
           {/* Generated SKILL.md — editable */}
           <div>
