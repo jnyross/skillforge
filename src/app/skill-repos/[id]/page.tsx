@@ -7,7 +7,7 @@ import {
   ArrowLeft, GitCommit, FileText, Clock, Plus, RotateCcw,
   AlertTriangle, AlertCircle, Info, CheckCircle, GitBranch,
   Diff, Upload, Download, Hash, Type, BarChart3, Tag, X, Globe, User,
-  FlaskConical, Users, Star, Zap, ExternalLink
+  FlaskConical, Users, Star, Zap, ExternalLink, TrendingUp
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -518,6 +518,18 @@ export default function SkillRepoPage() {
               <h1 className="text-2xl font-bold">{repo.displayName}</h1>
               <p className="text-sm text-muted-foreground font-mono">{repo.slug}</p>
             </div>
+            <Link href={`/skill-repos/${repoId}/improve`}>
+              <Button variant="outline">
+                <TrendingUp className="mr-2 h-4 w-4" />
+                Improve
+              </Button>
+            </Link>
+            <Link href={`/skill-repos/${repoId}/trigger-optimizer`}>
+              <Button variant="outline">
+                <Zap className="mr-2 h-4 w-4" />
+                Optimize Trigger
+              </Button>
+            </Link>
             <Dialog open={importOpen} onOpenChange={setImportOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline">

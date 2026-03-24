@@ -34,6 +34,8 @@ model SkillRepo {
   errorAnalysisSessions    ErrorAnalysisSession[]
   branches                 SkillBranch[]
   evalBuilderSessions      EvalBuilderSession[]
+  triggerOptimizationRuns   TriggerOptimizationRun[]
+  improvementIterations    ImprovementIteration[]
 }
 
 model SkillVersion {
@@ -65,6 +67,8 @@ model SkillVersion {
   candidateVersions OptimizerCandidate[] @relation("CandidateVersion")
   parentCandidates  OptimizerCandidate[] @relation("CandidateParentVersion")
   branchHeads       SkillBranch[] @relation("BranchHead")
+  improvementSources ImprovementIteration[] @relation("ImprovementSource")
+  improvementResults ImprovementIteration[] @relation("ImprovementResult")
 
   @@index([skillRepoId, createdAt])
   @@index([skillRepoId, branchName, createdAt])
@@ -210,6 +214,7 @@ model EvalRun {
   caseRuns          EvalCaseRun[]
   benchmarkSnapshots BenchmarkSnapshot[]
   traces            Trace[]
+  blindComparisons  BlindComparison[]
 
   @@index([skillRepoId])
   @@index([skillVersionId])
@@ -233,6 +238,7 @@ model EvalCaseRun {
   traceId         String?
   evalFeedbackJson String    @default("{}") // Combined eval feedback from semantic grading
   allClaimsJson   String     @default("[]") // All claims extracted across all semantic assertions
+  baselineOutputJson String  @default("{}") // Baseline (no-skill) output for comparison
   createdAt       DateTime   @default(now())
 
   evalRun         EvalRun    @relation(fields: [evalRunId], references: [id], onDelete: Cascade)
@@ -240,6 +246,7 @@ model EvalCaseRun {
   skillVersion    SkillVersion @relation(fields: [skillVersionId], references: [id])
   assertions      AssertionResult[]
   trace           Trace?     @relation("CaseRunTrace", fields: [traceId], references: [id])
+  blindComparisons BlindComparison[]
 
   @@index([evalRunId])
   @@index([evalCaseId])
@@ -813,6 +820,116 @@ model ExecutorConfig {
   lastHealthCheck DateTime?
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
+}
+
+// =============================================================================
+// Blind Comparison entities (PR 4)
+// =============================================================================
+
+model BlindComparison {
+  id                String     @id @default(uuid())
+  evalCaseRunId     String
+  evalRunId         String
+  winner            String     // skill | baseline | TIE
+  skillIsA          Boolean    // true if skill output was randomly labeled A
+  delta             Float      @default(0) // skill_score - baseline_score
+  reasoningText     String     @default("") // Why the winner was chosen
+  rubricJson        String     @default("{}") // Full rubric scores for A and B
+  outputQualityJson String     @default("{}") // Strengths/weaknesses for each
+  expectationResultsJson String @default("{}") // Assertion pass rates per output
+  skillScore        Float      @default(0) // Unblinded skill overall score (1-10)
+  baselineScore     Float      @default(0) // Unblinded baseline overall score (1-10)
+  createdAt         DateTime   @default(now())
+
+  evalCaseRun       EvalCaseRun @relation(fields: [evalCaseRunId], references: [id], onDelete: Cascade)
+  evalRun           EvalRun     @relation(fields: [evalRunId], references: [id], onDelete: Cascade)
+
+  @@index([evalCaseRunId])
+  @@index([evalRunId])
+}
+
+// =============================================================================
+// Trigger Optimizer entities (PR 5)
+// =============================================================================
+
+model TriggerOptimizationRun {
+  id                String     @id @default(uuid())
+  skillRepoId       String
+  skillVersionId    String
+  status            String     @default("queued") // queued | generating-queries | reviewing | running | completed | failed
+  currentIteration  Int        @default(0)
+  maxIterations     Int        @default(5)
+  originalDescription String   @default("")
+  bestDescription   String     @default("")
+  bestTestScore     Float      @default(0)
+  bestTrainScore    Float      @default(0)
+  queriesJson       String     @default("[]") // JSON array of TriggerQuery objects
+  trainIndices      String     @default("[]") // JSON array of indices into queriesJson for train split
+  testIndices       String     @default("[]") // JSON array of indices into queriesJson for test split
+  error             String?
+  createdAt         DateTime   @default(now())
+  completedAt       DateTime?
+
+  skillRepo         SkillRepo  @relation(fields: [skillRepoId], references: [id], onDelete: Cascade)
+  iterations        TriggerOptimizationIteration[]
+
+  @@index([skillRepoId])
+  @@index([status])
+}
+
+model TriggerOptimizationIteration {
+  id                String     @id @default(uuid())
+  runId             String
+  iteration         Int        @default(0)
+  description       String     @default("") // The description tested in this iteration
+  trainScore        Float      @default(0) // Overall accuracy on train split
+  testScore         Float      @default(0) // Overall accuracy on test split
+  trainResultsJson  String     @default("[]") // Per-query results for train
+  testResultsJson   String     @default("[]") // Per-query results for test
+  improvementReason String     @default("") // Why this description was generated (failure analysis)
+  createdAt         DateTime   @default(now())
+
+  run               TriggerOptimizationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([runId, iteration])
+}
+
+// =============================================================================
+// Improvement Loop entities (PR 6)
+// =============================================================================
+
+model ImprovementIteration {
+  id                String     @id @default(uuid())
+  skillRepoId       String
+  sourceVersionId   String     // The version being improved
+  resultVersionId   String?    // The new version created after applying suggestions
+  iterationNumber   Int        @default(1)
+  status            String     @default("pending") // pending | running | analyzing | completed | failed
+  // Eval results
+  evalRunId         String?    // The eval run for this iteration
+  passRate          Float?
+  // Comparison results
+  comparisonRunId   String?    // Reference to blind comparison
+  skillWinRate      Float?
+  avgDelta          Float?
+  // Analysis results (from analyzer agent)
+  analysisJson      String     @default("{}") // Full AnalysisResult JSON
+  // Suggestions
+  suggestionsJson   String     @default("[]") // Array of improvement suggestions
+  acceptedIndices   String     @default("[]") // Indices of accepted suggestions
+  // Metadata
+  error             String?
+  createdAt         DateTime   @default(now())
+  completedAt       DateTime?
+
+  skillRepo         SkillRepo  @relation(fields: [skillRepoId], references: [id], onDelete: Cascade)
+  sourceVersion     SkillVersion @relation("ImprovementSource", fields: [sourceVersionId], references: [id])
+  resultVersion     SkillVersion? @relation("ImprovementResult", fields: [resultVersionId], references: [id])
+
+  @@index([skillRepoId])
+  @@index([sourceVersionId])
+  @@index([status])
 }
 
 model AuditLog {
