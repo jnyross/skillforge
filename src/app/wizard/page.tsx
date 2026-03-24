@@ -151,15 +151,20 @@ export default function WizardPage() {
       if (advancedOptions.safetyConstraints) setSafetyConstraints(advancedOptions.safetyConstraints)
       if (advancedOptions.allowedTools) setAllowedTools(advancedOptions.allowedTools)
     }
-    // Now trigger generation
-    handleGenerateFromInterview(ctx)
+    // Pass advanced options directly to avoid stale React state closure
+    handleGenerateFromInterview(ctx, advancedOptions)
   }
 
-  const handleGenerateFromInterview = async (ctx: InterviewContext) => {
+  const handleGenerateFromInterview = async (ctx: InterviewContext, advancedOptions?: { corrections: string; safetyConstraints: string; allowedTools: string }) => {
     const wizardInput = interviewAnswersToWizardInput(ctx)
     if (!wizardInput.intent.trim()) return
     setError('')
     setStep('generating')
+
+    // Use passed-in advanced options directly to avoid stale React state
+    const effectiveCorrections = advancedOptions?.corrections || corrections
+    const effectiveSafetyConstraints = advancedOptions?.safetyConstraints || safetyConstraints
+    const effectiveAllowedTools = advancedOptions?.allowedTools || allowedTools
 
     try {
       let currentDraftId = draftId
@@ -171,10 +176,10 @@ export default function WizardPage() {
         concreteExamples: JSON.stringify(wizardInput.concreteExamples.filter(Boolean)),
         freedomLevel,
         configJson: JSON.stringify({
-          ...(corrections.trim() ? { corrections: corrections.trim().split('\n').filter(Boolean) } : {}),
+          ...(effectiveCorrections.trim() ? { corrections: effectiveCorrections.trim().split('\n').filter(Boolean) } : {}),
           ...(wizardInput.desiredOutputFormat.trim() ? { desiredOutputFormat: wizardInput.desiredOutputFormat.trim() } : {}),
-          ...(safetyConstraints.trim() ? { safetyConstraints: safetyConstraints.trim() } : {}),
-          ...(allowedTools.trim() ? { allowedTools: allowedTools.split(',').map((t: string) => t.trim()).filter(Boolean) } : {}),
+          ...(effectiveSafetyConstraints.trim() ? { safetyConstraints: effectiveSafetyConstraints.trim() } : {}),
+          ...(effectiveAllowedTools.trim() ? { allowedTools: effectiveAllowedTools.split(',').map((t: string) => t.trim()).filter(Boolean) } : {}),
         }),
         interviewTranscript: wizardInput.interviewTranscript,
         extractedAnswersJson: JSON.stringify(ctx.extractedAnswers),
