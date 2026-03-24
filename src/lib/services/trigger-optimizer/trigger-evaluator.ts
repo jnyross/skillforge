@@ -196,7 +196,8 @@ function updateDescription(content: string, newDescription: string): string {
     updatedLines.push(`description: ${newDescription}`)
   }
 
-  return `---${updatedLines.join('\n')}---${rest}`
+  const joined = updatedLines.join('\n')
+  return `---${joined.endsWith('\n') ? joined : joined + '\n'}---${rest}`
 }
 
 export { updateDescription }

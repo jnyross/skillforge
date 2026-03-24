@@ -75,6 +75,9 @@ export default function TriggerOptimizerPage() {
         setRuns(data)
         if (data.length > 0 && !selectedRun) {
           setSelectedRun(data[0])
+        } else if (selectedRun) {
+          const updated = data.find((r: OptimizationRun) => r.id === selectedRun.id)
+          if (updated) setSelectedRun(updated)
         }
       }
     } catch {
