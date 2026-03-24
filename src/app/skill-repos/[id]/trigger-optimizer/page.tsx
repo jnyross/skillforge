@@ -191,7 +191,7 @@ export default function TriggerOptimizerPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Zap className="h-6 w-6 text-yellow-400" />
-            <h1 className="text-2xl font-bold">{terms.triggerDescription} Optimizer</h1>
+            <h1 className="text-2xl font-bold">{terms.triggerDescription.charAt(0).toUpperCase() + terms.triggerDescription.slice(1)} Optimizer</h1>
           </div>
           <button
             onClick={handleStart}

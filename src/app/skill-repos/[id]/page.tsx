@@ -706,7 +706,7 @@ export default function SkillRepoPage() {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
                     <GitCommit className="h-4 w-4" />
-                    {terms.skillVersion}s ({repo.versions.length})
+                    {terms.skillVersion.charAt(0).toUpperCase() + terms.skillVersion.slice(1)}s ({repo.versions.length})
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">

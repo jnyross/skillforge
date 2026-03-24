@@ -390,6 +390,29 @@ export async function processInterviewMessage(
   // Handle state transitions
   if (updatedContext.state === 'greeting') {
     updatedContext.state = 'q1_capability'
+
+    // If the user's first message is verbose (>100 chars), try to extract answers upfront
+    if (apiKey && userMessage.length > 100) {
+      const { extractedAnswers, suggestedSkips } = await extractFromContext(userMessage)
+      if (extractedAnswers.length > 0) {
+        // Merge extracted answers into context
+        for (const extracted of extractedAnswers) {
+          const existingIdx = updatedContext.extractedAnswers.findIndex(
+            a => a.questionKey === extracted.questionKey
+          )
+          if (existingIdx >= 0) {
+            updatedContext.extractedAnswers[existingIdx] = extracted
+          } else {
+            updatedContext.extractedAnswers.push(extracted)
+          }
+        }
+
+        // Skip questions that were answered with high confidence
+        if (suggestedSkips.includes('capability')) {
+          updatedContext.state = suggestedSkips.includes('trigger') ? 'q3_format' : 'q2_trigger'
+        }
+      }
+    }
   }
 
   // Use LLM to extract answer and generate response if API key available

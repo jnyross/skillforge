@@ -8,6 +8,7 @@ import {
   Minus, Loader2, Play, AlertCircle
 } from 'lucide-react'
 import { useTechLevel } from '@/lib/context/tech-level-context'
+import { TooltipTerm } from '@/components/ui/tooltip-term'
 
 interface ComparisonSummary {
   totalComparisons: number
@@ -136,7 +137,7 @@ export default function ComparisonPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Scale className="h-6 w-6 text-primary" />
-            <h1 className="text-2xl font-bold">Blind Comparison</h1>
+            <h1 className="text-2xl font-bold"><TooltipTerm term="blind comparison">Blind Comparison</TooltipTerm></h1>
             <span className="text-sm text-muted-foreground font-mono">{runId.slice(0, 8)}</span>
           </div>
           <div className="flex items-center gap-2">
@@ -327,7 +328,7 @@ export default function ComparisonPage() {
                     {/* Rubric Scores Side-by-Side */}
                     {skillRubric && baselineRubric && (
                       <div>
-                        <h4 className="text-sm font-medium mb-2">Rubric Scores</h4>
+                        <h4 className="text-sm font-medium mb-2"><TooltipTerm term="rubric score">Rubric Scores</TooltipTerm></h4>
                         <div className="grid grid-cols-2 gap-4">
                           {/* Skill rubric */}
                           <div className="border border-green-500/20 rounded-lg p-3">

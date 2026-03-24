@@ -5,6 +5,7 @@ import { Wand2, ArrowRight, ArrowLeft, Plus, X, Loader2, AlertTriangle, Check, F
 import { ConversationalIntake } from '@/components/wizard/conversational-intake'
 import type { InterviewContext } from '@/lib/services/wizard/interview-service'
 import { interviewAnswersToWizardInput } from '@/lib/services/wizard/interview-service'
+import { useTechLevel } from '@/lib/context/tech-level-context'
 
 type WizardMode = 'extract' | 'synthesize' | 'hybrid' | 'scratch'
 type WizardStep = 'mode' | 'intake' | 'generating' | 'review' | 'saving' | 'saved'
@@ -85,6 +86,7 @@ const MODE_INFO: Record<WizardMode, { title: string; description: string; icon: 
 }
 
 export default function WizardPage() {
+  const { setLevel } = useTechLevel()
   const [step, setStep] = useState<WizardStep>('mode')
   const [mode, setMode] = useState<WizardMode | null>(null)
   const [intent, setIntent] = useState('')
@@ -151,6 +153,10 @@ export default function WizardPage() {
   // Handle interview completion — extract answers and trigger generation
   const handleInterviewComplete = (ctx: InterviewContext, advancedOptions?: { corrections: string; safetyConstraints: string; allowedTools: string }) => {
     setInterviewContext(ctx)
+    // Propagate detected tech level to app-wide context for adaptive language
+    if (ctx.techLevel?.level) {
+      setLevel(ctx.techLevel.level)
+    }
     const wizardInput = interviewAnswersToWizardInput(ctx)
     setIntent(wizardInput.intent)
     setConcreteExamples(wizardInput.concreteExamples)
