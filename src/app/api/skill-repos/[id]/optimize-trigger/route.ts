@@ -4,11 +4,9 @@
  */
 
 import { NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '@/lib/prisma'
 import { startOptimization } from '@/lib/services/trigger-optimizer/trigger-optimizer-service'
 import { getFilesAtCommit } from '@/lib/services/git-storage'
-
-const prisma = new PrismaClient()
 
 export async function GET(
   _req: Request,

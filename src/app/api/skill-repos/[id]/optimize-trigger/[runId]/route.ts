@@ -6,12 +6,10 @@
  */
 
 import { NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '@/lib/prisma'
 import { getProgress, runOptimizationLoop, promoteBestDescription } from '@/lib/services/trigger-optimizer/trigger-optimizer-service'
 import { getFilesAtCommit, createVersion } from '@/lib/services/git-storage'
 import { updateDescription } from '@/lib/services/trigger-optimizer/trigger-evaluator'
-
-const prisma = new PrismaClient()
 
 export async function GET(
   _req: Request,
@@ -60,10 +58,11 @@ export async function POST(
       const files = await getFilesAtCommit(repo.gitRepoPath, version.gitCommitSha)
       const updatedFiles = files.map(f => {
         if (f.path === 'SKILL.md') {
+          const updatedContent = updateDescription(f.content, description)
           return {
             ...f,
-            content: updateDescription(f.content, description),
-            size: updateDescription(f.content, description).length,
+            content: updatedContent,
+            size: updatedContent.length,
           }
         }
         return f
@@ -144,7 +143,17 @@ export async function PATCH(
   try {
     const body = await req.json()
 
-    // Allow updating queries before running
+    // Only allow editing queries before running
+    const currentRun = await prisma.triggerOptimizationRun.findUniqueOrThrow({
+      where: { id: runId },
+    })
+    if (currentRun.status !== 'reviewing' && currentRun.status !== 'generating-queries') {
+      return NextResponse.json(
+        { error: `Cannot edit queries: run is in '${currentRun.status}' status` },
+        { status: 400 }
+      )
+    }
+
     const updateData: Record<string, string> = {}
     if (body.queriesJson) updateData.queriesJson = JSON.stringify(body.queriesJson)
     if (body.trainIndices) updateData.trainIndices = JSON.stringify(body.trainIndices)

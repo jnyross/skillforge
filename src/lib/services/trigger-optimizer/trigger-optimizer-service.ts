@@ -12,14 +12,12 @@
  * 8. Enforce 1024-char limit
  */
 
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '@/lib/prisma'
 import { generateTriggerQueries, splitTriggerCases } from './query-generator'
 import { evaluateQueries, computeAccuracy } from './trigger-evaluator'
 import { improveDescription } from './description-improver'
 import type { TriggerQuery } from './query-generator'
 import type { PreviousAttempt } from './description-improver'
-
-const prisma = new PrismaClient()
 
 export interface OptimizationProgress {
   runId: string
@@ -104,6 +102,11 @@ export async function runOptimizationLoop(
   const run = await prisma.triggerOptimizationRun.findUniqueOrThrow({
     where: { id: runId },
   })
+
+  // Guard: only start from reviewing status
+  if (run.status !== 'reviewing' && run.status !== 'generating-queries') {
+    throw new Error(`Cannot start optimization: run is in '${run.status}' status (expected 'reviewing')`)
+  }
 
   const queries: TriggerQuery[] = JSON.parse(run.queriesJson)
   const trainIndices: number[] = JSON.parse(run.trainIndices)
