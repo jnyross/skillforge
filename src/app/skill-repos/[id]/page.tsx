@@ -6,7 +6,8 @@ import Link from 'next/link'
 import {
   ArrowLeft, GitCommit, FileText, Clock, Plus, RotateCcw,
   AlertTriangle, AlertCircle, Info, CheckCircle, GitBranch,
-  Diff, Upload, Download, Hash, Type, BarChart3, Tag, X, Globe, User
+  Diff, Upload, Download, Hash, Type, BarChart3, Tag, X, Globe, User,
+  FlaskConical, Users, Star, Zap, ExternalLink
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -104,6 +105,15 @@ export default function SkillRepoPage() {
   const [newTagName, setNewTagName] = useState('')
   const [addingTag, setAddingTag] = useState(false)
 
+  // Linked resources state
+  const [linkedEvalRuns, setLinkedEvalRuns] = useState<Array<{
+    id: string; status: string; suiteId: string; metricsJson: string; createdAt: string;
+    suite?: { name: string };
+  }>>([])
+  const [linkedReviews, setLinkedReviews] = useState<Array<{
+    id: string; name: string; type: string; status: string; createdAt: string;
+  }>>([])
+
   // New version dialog
   const [newVersionOpen, setNewVersionOpen] = useState(false)
   const [newVersionData, setNewVersionData] = useState({
@@ -128,6 +138,24 @@ export default function SkillRepoPage() {
       }
       const data = await res.json()
       setSelectedVersion(data)
+
+      // Load linked eval runs
+      try {
+        const runsRes = await fetch(`/api/eval-runs?skillVersionId=${versionId}`)
+        if (runsRes.ok) {
+          const runsData = await runsRes.json()
+          setLinkedEvalRuns(Array.isArray(runsData) ? runsData : runsData.runs || [])
+        }
+      } catch { /* ignore */ }
+
+      // Load linked review sessions (scoped to repo, not version — ReviewSession has no skillVersionId)
+      try {
+        const reviewsRes = await fetch(`/api/review-sessions?skillRepoId=${repoId}`)
+        if (reviewsRes.ok) {
+          const reviewsData = await reviewsRes.json()
+          setLinkedReviews(Array.isArray(reviewsData) ? reviewsData : reviewsData.sessions || [])
+        }
+      } catch { /* ignore */ }
     } catch (err) {
       console.error('Failed to load version:', err)
     } finally {
@@ -942,6 +970,97 @@ export default function SkillRepoPage() {
                           </div>
                         </CardContent>
                       </Card>
+
+                      {/* Linked Eval Runs */}
+                      {linkedEvalRuns.length > 0 && (
+                        <Card>
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <FlaskConical className="h-4 w-4" />
+                              Linked Eval Runs ({linkedEvalRuns.length})
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-2">
+                              {linkedEvalRuns.slice(0, 5).map((run) => {
+                                let passRate: number | undefined
+                                try {
+                                  const m = JSON.parse(run.metricsJson || '{}')
+                                  passRate = m.passRate
+                                } catch { /* ignore */ }
+                                return (
+                                  <Link key={run.id} href={`/evals/runs/${run.id}`}>
+                                    <div className="flex items-center justify-between p-2 rounded hover:bg-accent/50">
+                                      <div className="flex items-center gap-2">
+                                        <Badge variant={run.status === 'completed' ? 'outline' : 'secondary'} className="text-xs">
+                                          {run.status}
+                                        </Badge>
+                                        <span className="text-sm">{run.suite?.name || run.suiteId.slice(0, 8)}</span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        {passRate !== undefined && (
+                                          <span className={`text-xs font-mono ${passRate >= 0.8 ? 'text-green-400' : passRate >= 0.5 ? 'text-yellow-400' : 'text-red-400'}`}>
+                                            {(passRate * 100).toFixed(0)}%
+                                          </span>
+                                        )}
+                                        <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                                      </div>
+                                    </div>
+                                  </Link>
+                                )
+                              })}
+                              {linkedEvalRuns.length > 5 && (
+                                <p className="text-xs text-muted-foreground text-center">+{linkedEvalRuns.length - 5} more</p>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {/* Linked Reviews */}
+                      {linkedReviews.length > 0 && (
+                        <Card>
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <Users className="h-4 w-4" />
+                              Linked Reviews ({linkedReviews.length})
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-2">
+                              {linkedReviews.slice(0, 5).map((review) => (
+                                <Link key={review.id} href={`/reviews/${review.id}`}>
+                                  <div className="flex items-center justify-between p-2 rounded hover:bg-accent/50">
+                                    <div className="flex items-center gap-2">
+                                      <Badge variant="outline" className="text-xs">{review.type}</Badge>
+                                      <span className="text-sm">{review.name}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <Badge variant={review.status === 'completed' ? 'outline' : 'secondary'} className="text-xs">
+                                        {review.status}
+                                      </Badge>
+                                      <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                                    </div>
+                                  </div>
+                                </Link>
+                              ))}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {/* Champion indicator */}
+                      {selectedVersion.isChampion && (
+                        <Card className="border-yellow-500/30">
+                          <CardContent className="p-4 flex items-center gap-3">
+                            <Star className="h-5 w-5 text-yellow-400" />
+                            <div>
+                              <p className="font-medium">Champion Version</p>
+                              <p className="text-xs text-muted-foreground">This version is the current champion for this skill repository.</p>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
                     </div>
                   </TabsContent>
 

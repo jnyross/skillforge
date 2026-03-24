@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   ChevronLeft, CheckCircle, XCircle, Clock, AlertCircle,
-  Loader2, Activity, BarChart3
+  Loader2, Activity, BarChart3, RotateCcw, ArrowUpRight
 } from 'lucide-react'
 
 interface EvalRunDetail {
@@ -81,6 +81,9 @@ export default function EvalRunDetailPage() {
   const [traces, setTraces] = useState<TraceItem[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'results' | 'metrics' | 'traces'>('results')
+  const [rerunning, setRerunning] = useState(false)
+  const [selectedFailedRuns, setSelectedFailedRuns] = useState<Set<string>>(new Set())
+  const [promoting, setPromoting] = useState(false)
 
   const loadRun = useCallback(async () => {
     const res = await fetch(`/api/eval-runs/${runId}`)
@@ -118,6 +121,39 @@ export default function EvalRunDetailPage() {
     }
   }
 
+  const handleRerun = async () => {
+    setRerunning(true)
+    const res = await fetch(`/api/eval-runs/${runId}/rerun`, { method: 'POST' })
+    if (res.ok) {
+      const newRun = await res.json()
+      await fetch(`/api/eval-runs/${newRun.id}/start`, { method: 'POST' })
+      window.location.href = `/evals/runs/${newRun.id}`
+    }
+    setRerunning(false)
+  }
+
+  const toggleFailedRun = (id: string) => {
+    setSelectedFailedRuns(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const handleBatchPromote = async () => {
+    if (selectedFailedRuns.size === 0) return
+    setPromoting(true)
+    await fetch(`/api/eval-runs/${runId}/batch-promote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ caseRunIds: Array.from(selectedFailedRuns) }),
+    })
+    setSelectedFailedRuns(new Set())
+    setPromoting(false)
+    loadRun()
+  }
+
   if (loading || !run) {
     return <div className="p-6 text-muted-foreground">Loading...</div>
   }
@@ -138,11 +174,22 @@ export default function EvalRunDetailPage() {
             <h1 className="text-2xl font-bold">Eval Run</h1>
             <span className="text-sm text-muted-foreground font-mono">{run.id.slice(0, 8)}</span>
           </div>
-          {run.status === 'running' && (
-            <span className="flex items-center gap-2 text-sm text-blue-400">
-              <Loader2 className="h-4 w-4 animate-spin" /> Running...
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {run.status === 'running' && (
+              <span className="flex items-center gap-2 text-sm text-blue-400">
+                <Loader2 className="h-4 w-4 animate-spin" /> Running...
+              </span>
+            )}
+            {(run.status === 'completed' || run.status === 'failed') && (
+              <button
+                onClick={handleRerun}
+                disabled={rerunning}
+                className="flex items-center gap-1 px-3 py-1.5 border border-border rounded-md text-sm hover:bg-accent disabled:opacity-50"
+              >
+                <RotateCcw className="h-4 w-4" /> {rerunning ? 'Rerunning...' : 'Rerun'}
+              </button>
+            )}
+          </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
           <div className="border border-border rounded-lg p-3">
@@ -221,6 +268,30 @@ export default function EvalRunDetailPage() {
       {/* Case Results */}
       {tab === 'results' && (
         <div className="space-y-3">
+          {/* Batch promote toolbar */}
+          {run.caseRuns.some(cr => cr.status === 'failed') && (
+            <div className="flex items-center gap-3 text-sm">
+              <button
+                onClick={() => {
+                  const failedIds = run.caseRuns.filter(cr => cr.status === 'failed').map(cr => cr.id)
+                  setSelectedFailedRuns(prev => prev.size === failedIds.length ? new Set() : new Set(failedIds))
+                }}
+                className="px-3 py-1.5 border border-border rounded-md hover:bg-accent"
+              >
+                {selectedFailedRuns.size === run.caseRuns.filter(cr => cr.status === 'failed').length ? 'Deselect All' : 'Select All Failed'}
+              </button>
+              {selectedFailedRuns.size > 0 && (
+                <button
+                  onClick={handleBatchPromote}
+                  disabled={promoting}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
+                >
+                  <ArrowUpRight className="h-4 w-4" />
+                  {promoting ? 'Promoting...' : `Promote ${selectedFailedRuns.size} to Eval Cases`}
+                </button>
+              )}
+            </div>
+          )}
           {run.caseRuns.length === 0 ? (
             <div className="text-center text-muted-foreground py-8">
               {run.status === 'queued' || run.status === 'running' ? 'Waiting for results...' : 'No case results.'}
@@ -230,6 +301,14 @@ export default function EvalRunDetailPage() {
               <div key={cr.id} className="border border-border rounded-lg p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
+                    {cr.status === 'failed' && (
+                      <input
+                        type="checkbox"
+                        checked={selectedFailedRuns.has(cr.id)}
+                        onChange={() => toggleFailedRun(cr.id)}
+                        className="h-4 w-4 rounded border-border"
+                      />
+                    )}
                     {statusIcon(cr.status)}
                     <span className="font-medium">{cr.evalCase.name}</span>
                     <span className="text-xs text-muted-foreground font-mono">{cr.evalCase.key}</span>

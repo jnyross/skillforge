@@ -42,9 +42,64 @@ export async function GET() {
     lintByVersion.set(lr.skillVersionId, existing)
   }
 
+  // Fetch failing suite counts and active optimizer counts per repo
+  const repoIds = repos.map(r => r.id)
+
+  const [failingSuites, activeOptimizers] = await Promise.all([
+    prisma.evalRun.findMany({
+      where: {
+        skillRepoId: { in: repoIds },
+        status: 'completed',
+      },
+      select: { skillRepoId: true, suiteId: true, metricsJson: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+    }).then((runs) => {
+      const failingCounts = new Map<string, number>()
+      // Keep only the latest run per (skillRepoId, suiteId) pair
+      const latestBySuite = new Map<string, typeof runs[0]>()
+      for (const run of runs) {
+        const key = `${run.skillRepoId}:${run.suiteId}`
+        if (!latestBySuite.has(key)) {
+          latestBySuite.set(key, run) // Already sorted desc, so first seen = latest
+        }
+      }
+      // Count unique failing suites per repo (only based on latest run)
+      const bySuite = new Map<string, Set<string>>()
+      for (const run of Array.from(latestBySuite.values())) {
+        try {
+          const metrics = JSON.parse(run.metricsJson || '{}')
+          if (metrics.passRate !== undefined && metrics.passRate < 1.0) {
+            if (!bySuite.has(run.skillRepoId)) bySuite.set(run.skillRepoId, new Set())
+            bySuite.get(run.skillRepoId)!.add(run.suiteId)
+          }
+        } catch { /* ignore */ }
+      }
+      for (const [repoId, suiteIds] of Array.from(bySuite.entries())) {
+        failingCounts.set(repoId, suiteIds.size)
+      }
+      return failingCounts
+    }),
+    prisma.optimizerRun.groupBy({
+      by: ['skillRepoId'],
+      where: {
+        skillRepoId: { in: repoIds },
+        status: { in: ['queued', 'running'] },
+      },
+      _count: true,
+    }).then(results => {
+      const map = new Map<string, number>()
+      for (const r of results) {
+        map.set(r.skillRepoId, r._count)
+      }
+      return map
+    }),
+  ])
+
   const reposDto = repos.map(({ gitRepoPath: _g, ...rest }) => ({
     ...rest,
     lintResults: lintByVersion.get(rest.versions[0]?.id) || [],
+    failingSuiteCount: failingSuites.get(rest.id) || 0,
+    activeOptimizerCount: activeOptimizers.get(rest.id) || 0,
   }))
   return NextResponse.json(reposDto)
 }

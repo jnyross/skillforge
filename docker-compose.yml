@@ -9,7 +9,10 @@ services:
       - "${PORT:-3000}:3000"
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=file:/data/skillforge.db
+      - DATABASE_URL=${DATABASE_URL:-file:/data/skillforge.db}
+      - DATABASE_PROVIDER=${DATABASE_PROVIDER:-sqlite}
+      - QUEUE_PROVIDER=${QUEUE_PROVIDER:-memory}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
       - SKILL_REPOS_PATH=/data/skill-repos
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - DEFAULT_EXECUTOR=${DEFAULT_EXECUTOR:-claude-cli}
@@ -25,8 +28,45 @@ services:
       retries: 3
       start_period: 30s
 
+  # PostgreSQL — used when DATABASE_PROVIDER=postgresql
+  # Set DATABASE_URL=postgresql://skillforge:skillforge_dev@postgres:5432/skillforge
+  postgres:
+    image: postgres:16-alpine
+    profiles: ["postgres"]
+    environment:
+      POSTGRES_DB: skillforge
+      POSTGRES_USER: skillforge
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-skillforge_dev}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U skillforge"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis — used when QUEUE_PROVIDER=redis
+  redis:
+    image: redis:7-alpine
+    profiles: ["redis"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
 volumes:
   skillforge-data:
     driver: local
   claude-config:
+    driver: local
+  postgres-data:
+    driver: local
+  redis-data:
     driver: local

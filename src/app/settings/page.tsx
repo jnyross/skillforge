@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Settings, Plus, CheckCircle, XCircle, RefreshCw } from 'lucide-react'
+import { Settings, Plus, CheckCircle, XCircle, RefreshCw, Shield } from 'lucide-react'
 
 interface ExecutorConfigItem {
   id: string
@@ -165,6 +165,72 @@ export default function SettingsPage() {
         )}
       </div>
 
+      {/* Execution Modes section */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold flex items-center gap-2">
+          <Shield className="h-5 w-5" /> Execution Modes
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Control what Claude Code is allowed to do during eval execution.
+        </p>
+        <div className="space-y-3">
+          {[
+            { mode: 'read-only', label: 'Read Only', desc: 'Can only read files and environment. No writes or side effects.', color: 'border-green-500/30' },
+            { mode: 'edit', label: 'Edit', desc: 'Can read and write files. No external side effects (network, exec).', color: 'border-blue-500/30' },
+            { mode: 'side-effect', label: 'Full Access', desc: 'Full access — can run commands, make network calls, modify filesystem.', color: 'border-amber-500/30' },
+          ].map(m => (
+            <div key={m.mode} className={`border ${m.color} rounded-lg p-4`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="font-medium">{m.label}</span>
+                  <span className="text-xs text-muted-foreground ml-2 font-mono">--permission-mode {m.mode}</span>
+                </div>
+                <span className="text-xs px-2 py-0.5 rounded bg-secondary text-muted-foreground">{m.mode}</span>
+              </div>
+              <p className="text-sm text-muted-foreground mt-1">{m.desc}</p>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Set the execution mode per eval run when creating a run. The default mode is controlled by the executor configuration.
+        </p>
+      </div>
+
+      {/* Security section */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">Security</h2>
+        <div className="border border-border rounded-lg p-4 space-y-3 text-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="font-medium">Symlink Attack Prevention</span>
+              <p className="text-xs text-muted-foreground">Zip imports are scanned for symlink attacks</p>
+            </div>
+            <span className="px-2 py-0.5 rounded text-xs bg-green-500/10 text-green-400">Active</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="font-medium">Folder Import Allowlist</span>
+              <p className="text-xs text-muted-foreground">Only allowed paths can be imported from filesystem</p>
+            </div>
+            <span className="px-2 py-0.5 rounded text-xs bg-green-500/10 text-green-400">Active</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="font-medium">Audit Logging</span>
+              <p className="text-xs text-muted-foreground">All significant actions are logged</p>
+            </div>
+            <span className="px-2 py-0.5 rounded text-xs bg-green-500/10 text-green-400">Active</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="font-medium">Optimistic Locking</span>
+              <p className="text-xs text-muted-foreground">Concurrent version saves are prevented</p>
+            </div>
+            <span className="px-2 py-0.5 rounded text-xs bg-green-500/10 text-green-400">Active</span>
+          </div>
+        </div>
+      </div>
+
       {/* System info section */}
       <div className="space-y-4">
         <h2 className="text-lg font-semibold">System</h2>
@@ -183,7 +249,7 @@ export default function SettingsPage() {
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Version</span>
-            <span>0.2.0</span>
+            <span>0.3.0</span>
           </div>
         </div>
       </div>

@@ -7,6 +7,8 @@ export async function GET(request: NextRequest) {
   const skillVersionId = searchParams.get('skillVersionId')
   const status = searchParams.get('status')
   const model = searchParams.get('model')
+  const suiteId = searchParams.get('suiteId')
+  const tag = searchParams.get('tag')
   const limit = parseInt(searchParams.get('limit') || '50', 10)
   const offset = parseInt(searchParams.get('offset') || '0', 10)
 
@@ -15,6 +17,8 @@ export async function GET(request: NextRequest) {
   if (skillVersionId) where.skillVersionId = skillVersionId
   if (status) where.status = status
   if (model) where.model = model
+  if (suiteId) where.evalRun = { suiteId }
+  if (tag) where.caseRuns = { some: { evalCase: { tags: { contains: tag } } } }
 
   const [traces, total] = await Promise.all([
     prisma.trace.findMany({
