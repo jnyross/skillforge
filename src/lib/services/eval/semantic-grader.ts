@@ -197,7 +197,7 @@ export function detectProgrammaticAssertion(
     return {
       type: 'file_exists',
       target: filePath,
-      script: `const fs = require('fs'); const path = require('path'); const ws = process.env.EVAL_WORKSPACE || '.'; const fp = path.resolve(ws, ${JSON.stringify(filePath)}); if (!fp.startsWith(path.resolve(ws) + path.sep) && fp !== path.resolve(ws)) { console.log(JSON.stringify({ passed: false, evidence: 'Path traversal detected' })) } else { console.log(JSON.stringify({ passed: fs.existsSync(fp), evidence: fs.existsSync(fp) ? 'File exists: ${filePath}' : 'File not found: ${filePath}' })) }`,
+      script: `const fs = require('fs'); const path = require('path'); const ws = process.env.EVAL_WORKSPACE || '.'; const fp = path.resolve(ws, ${JSON.stringify(filePath)}); if (!fp.startsWith(path.resolve(ws) + path.sep) && fp !== path.resolve(ws)) { console.log(JSON.stringify({ passed: false, evidence: 'Path traversal detected' })) } else { const exists = fs.existsSync(fp); console.log(JSON.stringify({ passed: exists, evidence: exists ? 'File exists: ' + fp : 'File not found: ' + fp })) }`,
     }
   }
 
