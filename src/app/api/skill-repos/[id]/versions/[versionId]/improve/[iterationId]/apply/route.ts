@@ -162,7 +162,7 @@ export async function POST(
       where: { id: iterationId },
       data: {
         resultVersionId: newVersion.id,
-        acceptedIndices: JSON.stringify(body.acceptedIndices),
+        acceptedIndices: JSON.stringify(body.acceptedIndices.filter(i => i >= 0 && i < allSuggestions.length)),
       },
     })
 
