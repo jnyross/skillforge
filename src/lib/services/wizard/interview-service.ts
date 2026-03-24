@@ -435,7 +435,7 @@ async function processWithLLM(
 
   const currentQuestion = getCurrentQuestionKey(context.state)
 
-  const systemPrompt = `You are SkillForge's interview assistant, helping users create Claude Code skills through a structured 4-question interview.
+  const systemPrompt = `You are SkillForge's interview assistant, helping users create Claude Code skills through a structured 5-question interview.
 
 CURRENT STATE: ${context.state}
 USER TECH LEVEL: ${techLevel}
@@ -719,10 +719,10 @@ function generateFallbackResponse(nextState: InterviewState, terms: Record<strin
  */
 export function generateGreeting(mode: string): string {
   const modeIntros: Record<string, string> = {
-    scratch: "Let's create a new skill from scratch! I'll ask you 4 quick questions to understand what you need.",
-    extract: "Let's extract a skill from your experience! I'll ask 4 questions to capture the key patterns.",
-    synthesize: "Let's build a skill from your artifacts! I'll ask 4 questions to understand how to structure it.",
-    hybrid: "Let's create a skill combining your experience and documentation! 4 quick questions to get started.",
+    scratch: "Let's create a new skill from scratch! I'll ask you 5 quick questions to understand what you need.",
+    extract: "Let's extract a skill from your experience! I'll ask 5 questions to capture the key patterns.",
+    synthesize: "Let's build a skill from your artifacts! I'll ask 5 questions to understand how to structure it.",
+    hybrid: "Let's create a skill combining your experience and documentation! 5 quick questions to get started.",
   }
 
   return modeIntros[mode] || modeIntros.scratch

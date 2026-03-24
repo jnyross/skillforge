@@ -528,7 +528,7 @@ export default function ImprovePage() {
                     ? `${(selectedIteration.skillWinRate * 100).toFixed(0)}%`
                     : 'N/A'}
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">{terms.blindComparison} Win Rate</p>
+                <p className="text-xs text-muted-foreground mt-1">{terms.skillTerm} Win Rate</p>
               </div>
               <div className="border border-border rounded-lg p-4 text-center">
                 <p className={`text-3xl font-bold ${
