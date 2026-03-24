@@ -34,6 +34,7 @@ model SkillRepo {
   errorAnalysisSessions    ErrorAnalysisSession[]
   branches                 SkillBranch[]
   evalBuilderSessions      EvalBuilderSession[]
+  triggerOptimizationRuns   TriggerOptimizationRun[]
 }
 
 model SkillVersion {
@@ -838,6 +839,53 @@ model BlindComparison {
 
   @@index([evalCaseRunId])
   @@index([evalRunId])
+}
+
+// =============================================================================
+// Trigger Optimizer entities (PR 5)
+// =============================================================================
+
+model TriggerOptimizationRun {
+  id                String     @id @default(uuid())
+  skillRepoId       String
+  skillVersionId    String
+  status            String     @default("queued") // queued | generating-queries | reviewing | running | completed | failed
+  currentIteration  Int        @default(0)
+  maxIterations     Int        @default(5)
+  originalDescription String   @default("")
+  bestDescription   String     @default("")
+  bestTestScore     Float      @default(0)
+  bestTrainScore    Float      @default(0)
+  queriesJson       String     @default("[]") // JSON array of TriggerQuery objects
+  trainIndices      String     @default("[]") // JSON array of indices into queriesJson for train split
+  testIndices       String     @default("[]") // JSON array of indices into queriesJson for test split
+  error             String?
+  createdAt         DateTime   @default(now())
+  completedAt       DateTime?
+
+  skillRepo         SkillRepo  @relation(fields: [skillRepoId], references: [id], onDelete: Cascade)
+  iterations        TriggerOptimizationIteration[]
+
+  @@index([skillRepoId])
+  @@index([status])
+}
+
+model TriggerOptimizationIteration {
+  id                String     @id @default(uuid())
+  runId             String
+  iteration         Int        @default(0)
+  description       String     @default("") // The description tested in this iteration
+  trainScore        Float      @default(0) // Overall accuracy on train split
+  testScore         Float      @default(0) // Overall accuracy on test split
+  trainResultsJson  String     @default("[]") // Per-query results for train
+  testResultsJson   String     @default("[]") // Per-query results for test
+  improvementReason String     @default("") // Why this description was generated (failure analysis)
+  createdAt         DateTime   @default(now())
+
+  run               TriggerOptimizationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([runId, iteration])
 }
 
 model AuditLog {
