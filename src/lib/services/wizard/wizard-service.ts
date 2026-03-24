@@ -218,6 +218,55 @@ export async function generateSkillFromWizard(input: WizardInput): Promise<Gener
       return mockGenerate(input)
     }
 
+    // ── Phase 1.5: Self-Revision Pass ──
+    // The LLM re-reads its own output with fresh eyes and tightens it.
+    // This mirrors skill-creator's "look at it with fresh eyes and improve it" principle.
+    try {
+      const revisionResponse = await client.messages.create({
+        model: 'claude-opus-4-6',
+        max_tokens: 8192,
+        messages: [{
+          role: 'user',
+          content: `You previously generated the SKILL.md below. Now re-read it with fresh eyes and improve it.
+
+## Revision Checklist
+1. Remove any instruction that wouldn't change the output if deleted — if the agent would do the same thing without this line, cut it
+2. Tighten verbose passages — every word must earn its place
+3. Ensure every instruction is in imperative form ("Run X", "Check Y"), not wisdom ("It's important to...")
+4. Check for duplicate or overlapping instructions and merge them
+5. Verify the description triggers broadly enough (includes near-miss scenarios)
+6. Confirm anti-patterns are specific to this domain, not generic advice
+7. Make sure examples show complete input→output, not just format descriptions
+
+## Current SKILL.md
+\`\`\`markdown
+${result.skillMd}
+\`\`\`
+
+Output the COMPLETE improved SKILL.md (the full file, not a diff). If no improvements are needed, output it unchanged. Output ONLY the SKILL.md content, no JSON wrapper, no explanation.`,
+        }],
+      })
+
+      const revisedText = revisionResponse.content[0].type === 'text' ? revisionResponse.content[0].text : ''
+
+      if (revisedText.length > 100) {
+        // Strip any markdown code fences the LLM may have wrapped it in
+        const cleaned = revisedText.replace(/^```(?:markdown)?\n?/, '').replace(/\n?```$/, '')
+
+        // Only accept the revision if it still passes Phase 1 quality checks
+        const revisedQuality = validateSkillQuality(cleaned, input.intent)
+        if (revisedQuality.passed && (revisedQuality.score >= (result.qualityScore || 0))) {
+          result.skillMd = cleaned
+          result.qualityScore = revisedQuality.score
+          result.qualityIssues = revisedQuality.issues.map(i => `[${i.severity.toUpperCase()}] ${i.message}`)
+          result.warnings.push('Self-revision pass applied (tightened instructions).')
+        }
+      }
+    } catch {
+      // Revision is best-effort — don't fail the whole generation
+      result.warnings.push('Self-revision pass skipped (LLM call failed).')
+    }
+
     // ── Phase 2: LLM review pass ──
     const review = await reviewSkillQuality(result.skillMd, input.intent, input.mode)
     result.reviewScore = review.score

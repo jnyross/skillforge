@@ -42,6 +42,10 @@ Generate exactly 20 trigger evaluation queries:
 - Include edge cases that are still within scope
 - Vary complexity (simple requests, detailed requests, requests with context)
 - Do NOT just rephrase the description — imagine real usage scenarios
+- Include at least 2 queries with realistic file paths and project context (e.g., "I'm working on /users/src/api/handlers/auth.go and need...")
+- Include at least 2 queries with personal context or backstory (e.g., "my manager asked me to...", "we're migrating our...")
+- Include at least 2 queries with typos, informal shorthand, or casual language (e.g., "can u help w/ this", "whats the best way to...")
+- Include at least 1 multi-step query where the skill is part of a larger task (e.g., "I need to refactor this module and then...")
 
 ### Requirements for SHOULD-NOT-TRIGGER queries:
 - Use queries that are plausibly similar but outside scope
@@ -49,6 +53,8 @@ Generate exactly 20 trigger evaluation queries:
 - Include queries that share keywords but have different intent
 - Include completely unrelated queries
 - Make some queries "tricky" — close to triggering but shouldn't
+- Include at least 2 near-miss queries that share domain terminology but are subtly different in intent
+- Include at least 1 query that mentions the skill's domain but asks for something the skill shouldn't do
 
 ### Output Format
 Return a JSON array of exactly 20 objects:

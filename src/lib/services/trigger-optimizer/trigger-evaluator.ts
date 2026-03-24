@@ -10,6 +10,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
 import { v4 as uuid } from 'uuid'
+import Anthropic from '@anthropic-ai/sdk'
 import type { TriggerQuery } from './query-generator'
 
 const execFileAsync = promisify(execFile)
@@ -110,8 +111,8 @@ async function runSingleQuery(
       env: { ...process.env, HOME: process.env.HOME },
     })
 
-    // Check if the skill was triggered by looking at the output
-    return detectSkillTriggered(stdout, skillDescription)
+    // Check if the skill was triggered using LLM analysis
+    return await detectSkillTriggered(stdout, skillDescription, query)
   } catch (err) {
     // Timeout or error — treat as not triggered
     console.error(`Trigger eval error for query "${query.slice(0, 50)}...":`, err instanceof Error ? err.message : err)
@@ -126,42 +127,56 @@ async function runSingleQuery(
 }
 
 /**
- * Detect whether a skill was triggered from the CLI output.
- * Looks for indicators that the model used the skill's instructions.
+ * Detect whether a skill was triggered from the CLI output using LLM analysis.
+ * Replaces heuristic keyword matching with an LLM call for accurate detection.
+ * Uses claude-haiku for speed and cost efficiency.
  */
-function detectSkillTriggered(output: string, skillDescription: string): boolean {
-  const lower = output.toLowerCase()
-  const descWords = skillDescription.toLowerCase().split(/\s+/).filter(w => w.length > 4)
+async function detectSkillTriggered(
+  output: string,
+  skillDescription: string,
+  query: string,
+): Promise<boolean> {
+  // Fast path: empty or trivially short output is never triggered
+  if (output.length < 20) return false
 
-  // Strong positive signals
-  const positiveSignals = [
-    'skill activated',
-    'using skill',
-    'loaded skill',
-    'applying skill',
-    'following the skill',
-    'as instructed by the skill',
-    'according to the skill',
-    'skill.md',
-  ]
+  try {
+    const client = new Anthropic()
+    const model = process.env.TRIGGER_DETECTION_MODEL || 'claude-haiku-3'
 
-  for (const signal of positiveSignals) {
-    if (lower.includes(signal)) return true
+    const response = await client.messages.create({
+      model,
+      max_tokens: 128,
+      messages: [{
+        role: 'user',
+        content: `You are a trigger detection judge. Determine if the following output shows evidence that a Claude Code skill was activated and its instructions were followed.
+
+## Skill Description
+${skillDescription.slice(0, 500)}
+
+## User Query
+${query.slice(0, 300)}
+
+## Claude Output (truncated)
+${output.slice(0, 3000)}
+
+## Instructions
+Does this output show evidence that the skill was loaded and its instructions influenced the response? Look for:
+- Output structure matching what the skill would prescribe
+- Domain-specific behavior that goes beyond generic responses
+- References to skill-specific patterns, formats, or procedures
+
+Respond with ONLY "YES" or "NO" followed by a single sentence reason.
+Example: "YES — output follows the 5-7-5 syllable structure prescribed by the skill."
+Example: "NO — output is a generic response unrelated to the skill's domain."`,
+      }],
+    })
+
+    const text = response.content[0].type === 'text' ? response.content[0].text : ''
+    return text.trim().toUpperCase().startsWith('YES')
+  } catch {
+    // Fallback: if LLM call fails, use simple length heuristic
+    return output.length > 200
   }
-
-  // Check if the output references key terms from the skill description
-  // A triggered response typically addresses the skill's domain
-  const matchingWords = descWords.filter(w => lower.includes(w))
-  const matchRatio = descWords.length > 0 ? matchingWords.length / descWords.length : 0
-
-  // If most of the description keywords appear in output, likely triggered
-  if (matchRatio >= 0.6 && output.length > 200) return true
-
-  // If the output is very short or generic, likely not triggered
-  if (output.length < 50) return false
-
-  // Default: check if output length suggests substantive work was done
-  return output.length > 500
 }
 
 /**
