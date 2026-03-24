@@ -246,7 +246,7 @@ export async function runIteration(input: IterationInput): Promise<IterationResu
 
       analysis = await analyzeComparison({
         comparisonResult: {
-          winner: firstComparison.winner as 'skill' | 'baseline' | 'TIE',
+          winner: (skillWinRate ?? 0) > 0.5 ? 'skill' : (skillWinRate ?? 0) < 0.5 ? 'baseline' : 'TIE',
           reasoning: `Skill win rate: ${((skillWinRate ?? 0) * 100).toFixed(0)}%, avg delta: ${(avgDelta ?? 0).toFixed(2)}`,
           skillScore: Math.max(1, Math.min(10, 5 + (avgDelta ?? 0) / 2)),
           baselineScore: Math.max(1, Math.min(10, 5 - (avgDelta ?? 0) / 2)),

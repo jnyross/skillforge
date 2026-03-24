@@ -237,6 +237,8 @@ export default function ImprovePage() {
       // Switch to the new version
       if (data.newVersionId) {
         setSelectedVersionId(data.newVersionId)
+        setSelectedIteration(null)
+        setIterations([])
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to apply suggestions')
