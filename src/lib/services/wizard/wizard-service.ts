@@ -251,7 +251,7 @@ Output the COMPLETE improved SKILL.md (the full file, not a diff). If no improve
 
       if (revisedText.length > 100) {
         // Strip any markdown code fences the LLM may have wrapped it in
-        const cleaned = revisedText.replace(/^```(?:markdown)?\n?/, '').replace(/\n?```$/, '')
+        const cleaned = revisedText.replace(/^\s*```(?:markdown|md)?\s*\n?/, '').replace(/\n?\s*```\s*$/, '')
 
         // Only accept the revision if it still passes Phase 1 quality checks
         const revisedQuality = validateSkillQuality(cleaned, input.intent)
