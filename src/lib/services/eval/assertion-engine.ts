@@ -30,6 +30,7 @@ export type AssertionType =
   | 'exit_code'
   | 'custom_script'
   | 'judge'
+  | 'semantic'
 
 export interface AssertionDefinition {
   type: AssertionType
@@ -44,6 +45,10 @@ export interface AssertionDefinition {
     judgeId?: string // judge ID for 'judge' assertion type
     expectedOutcome?: string // expected outcome for judge context
     prompt?: string // original prompt for judge context
+    description?: string // semantic assertion description
+    criterion?: string // semantic assertion pass/fail criterion
+    dimension?: string // semantic assertion dimension
+    discriminating_note?: string // semantic assertion discriminating note
   }
 }
 
@@ -55,6 +60,13 @@ export interface AssertionResult {
   actual?: unknown
   evidence: string
   durationMs: number
+  // Semantic grading structured data (only populated for type === 'semantic')
+  semanticEvidence?: string
+  semanticReasoning?: string
+  semanticConfidence?: number
+  semanticDimension?: string
+  semanticClaimsJson?: string
+  semanticEvalFeedbackJson?: string
 }
 
 /**
@@ -96,6 +108,8 @@ export async function runAssertion(
         return await assertCustomScript(assertion, context, start)
       case 'judge':
         return await assertJudge(assertion, context, start)
+      case 'semantic':
+        return await assertSemantic(assertion, context, start)
       default:
         return {
           type: assertion.type,
@@ -696,6 +710,51 @@ async function assertJudge(
       type: 'judge',
       passed: false,
       evidence: `Judge evaluation error: ${err instanceof Error ? err.message : String(err)}`,
+      durationMs: Date.now() - start,
+    }
+  }
+}
+
+async function assertSemantic(
+  assertion: AssertionDefinition,
+  context: { result: string; stdout: string },
+  start: number
+): Promise<AssertionResult> {
+  const description = assertion.options?.description as string || String(assertion.expected ?? '')
+  const criterion = assertion.options?.criterion as string || description
+  const dimension = (assertion.options?.dimension as string || 'quality') as 'structure' | 'content' | 'quality' | 'format'
+  const discriminatingNote = assertion.options?.discriminating_note as string | undefined
+  const prompt = assertion.options?.prompt as string || ''
+
+  try {
+    const { gradeSemanticAssertion } = await import('./semantic-grader')
+    const result = await gradeSemanticAssertion(
+      { type: 'semantic', description, criterion, dimension, discriminating_note: discriminatingNote },
+      context.result,
+      prompt
+    )
+
+    return {
+      type: 'semantic',
+      passed: result.passed,
+      expected: criterion,
+      actual: result.evidence.slice(0, 500),
+      evidence: `[${dimension.toUpperCase()}] ${result.passed ? 'PASS' : 'FAIL'} (confidence: ${(result.confidence * 100).toFixed(0)}%)\n\nEvidence: ${result.evidence}\n\nReasoning: ${result.reasoning}${result.claims.length > 0 ? `\n\nClaims verified: ${result.claims.filter(c => c.verified).length}/${result.claims.length}` : ''}${result.evalFeedback ? `\n\nEval feedback: ${result.evalFeedback.overall}` : ''}`,
+      durationMs: Date.now() - start,
+      // Structured semantic data for persistence
+      semanticEvidence: result.evidence,
+      semanticReasoning: result.reasoning,
+      semanticConfidence: result.confidence,
+      semanticDimension: dimension,
+      semanticClaimsJson: JSON.stringify(result.claims),
+      semanticEvalFeedbackJson: result.evalFeedback ? JSON.stringify(result.evalFeedback) : '{}',
+    }
+  } catch (err) {
+    return {
+      type: 'semantic',
+      passed: false,
+      expected: criterion,
+      evidence: `Semantic grading error: ${err instanceof Error ? err.message : String(err)}`,
       durationMs: Date.now() - start,
     }
   }

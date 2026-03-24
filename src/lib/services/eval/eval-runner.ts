@@ -412,8 +412,31 @@ async function executeOutputCase(
     // Parse assertions from case config
     const caseConfig = JSON.parse(evalCase.configJson || '{}') as {
       assertions?: AssertionDefinition[]
+      semanticAssertions?: Array<{
+        type: string
+        description: string
+        criterion: string
+        dimension: string
+        discriminating_note?: string
+      }>
     }
     const assertions = caseConfig.assertions ?? []
+
+    // PR 3: Add semantic assertions from config
+    if (caseConfig.semanticAssertions && caseConfig.semanticAssertions.length > 0) {
+      for (const sa of caseConfig.semanticAssertions) {
+        assertions.push({
+          type: 'semantic',
+          options: {
+            description: sa.description,
+            criterion: sa.criterion,
+            dimension: sa.dimension,
+            discriminating_note: sa.discriminating_note,
+            prompt: evalCase.prompt,
+          },
+        })
+      }
+    }
 
     // If no explicit assertions but there's an expected outcome, add a contains check
     if (assertions.length === 0 && evalCase.expectedOutcome) {
@@ -467,8 +490,25 @@ async function executeOutputCase(
       },
     })
 
-    // Store individual assertion results
+    // Store individual assertion results (with semantic grading structured data)
+    const allClaimsForCase: unknown[] = []
+    const allEvalSuggestionsForCase: unknown[] = []
+
     for (const ar of assertionResults.results) {
+      // Use structured semantic data directly from the assertion result (no regex parsing)
+      const isSemantic = ar.type === 'semantic'
+      const claimsJson = isSemantic && ar.semanticClaimsJson ? ar.semanticClaimsJson : '[]'
+      const evalFeedbackJson = isSemantic && ar.semanticEvalFeedbackJson ? ar.semanticEvalFeedbackJson : '{}'
+
+      // Collect claims and suggestions for case-level aggregation
+      if (isSemantic) {
+        try { allClaimsForCase.push(...JSON.parse(claimsJson) as unknown[]) } catch { /* ignore */ }
+        try {
+          const feedback = JSON.parse(evalFeedbackJson) as { suggestions?: unknown[] }
+          if (feedback.suggestions) allEvalSuggestionsForCase.push(...feedback.suggestions)
+        } catch { /* ignore */ }
+      }
+
       await prisma.assertionResult.create({
         data: {
           evalCaseRunId: caseRun.id,
@@ -479,6 +519,28 @@ async function executeOutputCase(
           actual: ar.actual != null ? String(ar.actual) : '',
           message: ar.evidence,
           durationMs: ar.durationMs,
+          evidence: isSemantic ? (ar.semanticEvidence || '') : '',
+          reasoning: isSemantic ? (ar.semanticReasoning || '') : '',
+          confidence: isSemantic ? (ar.semanticConfidence ?? null) : null,
+          dimension: isSemantic ? (ar.semanticDimension || '') : '',
+          claimsJson,
+          evalFeedbackJson,
+        },
+      })
+    }
+
+    // Update case run with aggregated claims and eval feedback from semantic assertions
+    if (allClaimsForCase.length > 0 || allEvalSuggestionsForCase.length > 0) {
+      await prisma.evalCaseRun.update({
+        where: { id: caseRun.id },
+        data: {
+          allClaimsJson: JSON.stringify(allClaimsForCase),
+          evalFeedbackJson: JSON.stringify({
+            suggestions: allEvalSuggestionsForCase,
+            overall: allEvalSuggestionsForCase.length > 0
+              ? `${allEvalSuggestionsForCase.length} suggestion(s) for improving eval assertions.`
+              : 'No suggestions, evals look solid.',
+          }),
         },
       })
     }

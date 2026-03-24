@@ -231,6 +231,8 @@ model EvalCaseRun {
   outputJson      String     @default("{}")
   error           String?
   traceId         String?
+  evalFeedbackJson String    @default("{}") // Combined eval feedback from semantic grading
+  allClaimsJson   String     @default("[]") // All claims extracted across all semantic assertions
   createdAt       DateTime   @default(now())
 
   evalRun         EvalRun    @relation(fields: [evalRunId], references: [id], onDelete: Cascade)
@@ -248,12 +250,18 @@ model AssertionResult {
   id              String     @id @default(uuid())
   evalCaseRunId   String
   name            String
-  type            String     // exact | contains | regex | json-schema | file-exists | custom
+  type            String     // exact | contains | regex | json-schema | file-exists | custom | semantic
   expected        String     @default("")
   actual          String     @default("")
   passed          Boolean
   message         String     @default("")
   durationMs      Int?
+  evidence        String     @default("")   // Quoted text from output supporting verdict (semantic grading)
+  reasoning       String     @default("")   // Why pass/fail with specific citations (semantic grading)
+  confidence      Float?                     // 0-1 confidence score (semantic grading)
+  dimension       String     @default("")   // structure | content | quality | format (semantic grading)
+  claimsJson      String     @default("[]") // JSON array of ClaimVerification objects
+  evalFeedbackJson String    @default("{}") // JSON EvalFeedback object
   createdAt       DateTime   @default(now())
 
   evalCaseRun     EvalCaseRun @relation(fields: [evalCaseRunId], references: [id], onDelete: Cascade)
