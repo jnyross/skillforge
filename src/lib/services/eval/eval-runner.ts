@@ -423,18 +423,42 @@ async function executeOutputCase(
     const assertions = caseConfig.assertions ?? []
 
     // PR 3: Add semantic assertions from config
+    // PR B3: Check for programmatic equivalents first to avoid unnecessary LLM calls
     if (caseConfig.semanticAssertions && caseConfig.semanticAssertions.length > 0) {
+      const { detectProgrammaticAssertion } = await import('./semantic-grader')
       for (const sa of caseConfig.semanticAssertions) {
-        assertions.push({
+        const programmatic = detectProgrammaticAssertion({
           type: 'semantic',
-          options: {
-            description: sa.description,
-            criterion: sa.criterion,
-            dimension: sa.dimension,
-            discriminating_note: sa.discriminating_note,
-            prompt: evalCase.prompt,
-          },
+          description: sa.description,
+          criterion: sa.criterion,
+          dimension: sa.dimension as 'structure' | 'content' | 'quality' | 'format',
+          discriminating_note: sa.discriminating_note,
         })
+
+        if (programmatic && programmatic.script) {
+          // Use deterministic programmatic assertion instead of LLM
+          assertions.push({
+            type: 'programmatic',
+            target: programmatic.target,
+            expected: programmatic.expected,
+            options: {
+              script: programmatic.script,
+              description: sa.description,
+            },
+          })
+        } else {
+          // Fall back to semantic (LLM) grading
+          assertions.push({
+            type: 'semantic',
+            options: {
+              description: sa.description,
+              criterion: sa.criterion,
+              dimension: sa.dimension,
+              discriminating_note: sa.discriminating_note,
+              prompt: evalCase.prompt,
+            },
+          })
+        }
       }
     }
 

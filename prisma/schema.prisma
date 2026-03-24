@@ -239,6 +239,7 @@ model EvalCaseRun {
   evalFeedbackJson String    @default("{}") // Combined eval feedback from semantic grading
   allClaimsJson   String     @default("[]") // All claims extracted across all semantic assertions
   baselineOutputJson String  @default("{}") // Baseline (no-skill) output for comparison
+  feedbackJson    String     @default("{}") // Human feedback: { rating: 'good'|'bad'|null, comment: string }
   createdAt       DateTime   @default(now())
 
   evalRun         EvalRun    @relation(fields: [evalRunId], references: [id], onDelete: Cascade)

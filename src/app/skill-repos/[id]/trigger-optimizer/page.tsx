@@ -456,15 +456,30 @@ export default function TriggerOptimizerPage() {
                         </span>
                         <div className="flex-1">
                           {editingQueries ? (
-                            <input
-                              value={editedQueries[idx]?.query || ''}
-                              onChange={e => {
-                                const updated = [...editedQueries]
-                                updated[idx] = { ...updated[idx], query: e.target.value }
-                                setEditedQueries(updated)
-                              }}
-                              className="w-full bg-muted/30 border border-border rounded px-2 py-1 text-sm"
-                            />
+                            <div className="space-y-1">
+                              <input
+                                value={editedQueries[idx]?.query || ''}
+                                onChange={e => {
+                                  const updated = [...editedQueries]
+                                  updated[idx] = { ...updated[idx], query: e.target.value }
+                                  setEditedQueries(updated)
+                                }}
+                                className="w-full bg-muted/30 border border-border rounded px-2 py-1 text-sm"
+                              />
+                              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <input
+                                  type="checkbox"
+                                  checked={editedQueries[idx]?.shouldTrigger ?? true}
+                                  onChange={e => {
+                                    const updated = [...editedQueries]
+                                    updated[idx] = { ...updated[idx], shouldTrigger: e.target.checked }
+                                    setEditedQueries(updated)
+                                  }}
+                                  className="h-3 w-3 rounded border-border"
+                                />
+                                Should trigger
+                              </label>
+                            </div>
                           ) : (
                             <span>{q.query}</span>
                           )}

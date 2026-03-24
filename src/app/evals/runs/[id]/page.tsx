@@ -5,7 +5,8 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   ChevronLeft, CheckCircle, XCircle, Clock, AlertCircle,
-  Loader2, Activity, BarChart3, RotateCcw, ArrowUpRight, Scale
+  Loader2, Activity, BarChart3, RotateCcw, ArrowUpRight, Scale,
+  Eye, ThumbsUp, ThumbsDown, AlertTriangle, ChevronDown, ChevronUp,
 } from 'lucide-react'
 
 interface EvalRunDetail {
@@ -35,13 +36,16 @@ interface CaseRun {
   costUsd: number | null
   triggerResult: boolean | null
   outputJson: string
+  evalFeedbackJson: string
+  allClaimsJson: string
+  feedbackJson: string
   error: string | null
   traceId: string | null
-  evalCase: { id: string; name: string; key: string; prompt: string; shouldTrigger: boolean | null }
-  assertions: AssertionResult[]
+  evalCase: { id: string; name: string; key: string; prompt: string; expectedOutcome: string; shouldTrigger: boolean | null }
+  assertions: AssertionResultItem[]
 }
 
-interface AssertionResult {
+interface AssertionResultItem {
   id: string
   name: string
   type: string
@@ -49,6 +53,12 @@ interface AssertionResult {
   expected: string
   actual: string
   message: string
+  evidence?: string
+  reasoning?: string
+  confidence?: number
+  dimension?: string
+  claimsJson?: string
+  evalFeedbackJson?: string
 }
 
 interface BenchmarkSnapshot {
@@ -80,7 +90,9 @@ export default function EvalRunDetailPage() {
   const [run, setRun] = useState<EvalRunDetail | null>(null)
   const [traces, setTraces] = useState<TraceItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'results' | 'metrics' | 'traces'>('results')
+  const [tab, setTab] = useState<'results' | 'metrics' | 'traces' | 'outputs'>('results')
+  const [expandedOutputs, setExpandedOutputs] = useState<Set<string>>(new Set())
+  const [feedbackState, setFeedbackState] = useState<Record<string, { rating: string | null; comment: string }>>({})
   const [rerunning, setRerunning] = useState(false)
   const [selectedFailedRuns, setSelectedFailedRuns] = useState<Set<string>>(new Set())
   const [promoting, setPromoting] = useState(false)
@@ -259,6 +271,9 @@ export default function EvalRunDetailPage() {
         </button>
         <button onClick={() => setTab('metrics')} className={`pb-2 text-sm font-medium border-b-2 ${tab === 'metrics' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
           <BarChart3 className="h-4 w-4 inline mr-1" /> Metrics
+        </button>
+        <button onClick={() => setTab('outputs')} className={`pb-2 text-sm font-medium border-b-2 ${tab === 'outputs' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
+          <Eye className="h-4 w-4 inline mr-1" /> Outputs
         </button>
         <button onClick={() => setTab('traces')} className={`pb-2 text-sm font-medium border-b-2 ${tab === 'traces' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
           <Activity className="h-4 w-4 inline mr-1" /> Traces ({traces.length})
@@ -449,6 +464,79 @@ export default function EvalRunDetailPage() {
                 </div>
               )}
 
+              {/* Suite Analysis Card */}
+              {(() => {
+                const suiteAnalysis = metrics.suiteAnalysis as {
+                  passRateStats?: { mean: number; stddev: number }
+                  nonDiscriminating?: Array<{ assertionDesc: string; reason: string; caseCount: number }>
+                  highVariance?: Array<{ assertionDesc: string; passRate: number }>
+                  durationStats?: { mean: number; stddev: number; p95: number }
+                } | undefined
+                if (!suiteAnalysis) return null
+                return (
+                  <div className="border border-border rounded-lg p-4">
+                    <h3 className="font-medium mb-3">Suite Analysis</h3>
+                    <div className="space-y-4">
+                      {suiteAnalysis.durationStats && (
+                        <div className="grid grid-cols-3 gap-4">
+                          <div>
+                            <p className="text-xs text-muted-foreground">Avg Duration</p>
+                            <p className="text-lg font-bold">{(suiteAnalysis.durationStats.mean / 1000).toFixed(1)}s</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">Std Dev</p>
+                            <p className="text-lg font-bold">{(suiteAnalysis.durationStats.stddev / 1000).toFixed(1)}s</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">P95 Duration</p>
+                            <p className="text-lg font-bold">{(suiteAnalysis.durationStats.p95 / 1000).toFixed(1)}s</p>
+                          </div>
+                        </div>
+                      )}
+                      {suiteAnalysis.nonDiscriminating && suiteAnalysis.nonDiscriminating.length > 0 && (
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
+                            <AlertTriangle className="h-3 w-3 text-yellow-400" />
+                            Non-discriminating assertions ({suiteAnalysis.nonDiscriminating.length})
+                          </p>
+                          <div className="space-y-1">
+                            {suiteAnalysis.nonDiscriminating.slice(0, 5).map((nd, i) => (
+                              <div key={i} className="text-sm flex items-center gap-2">
+                                <span className={`px-1.5 py-0.5 rounded text-xs ${
+                                  nd.reason === 'always_pass' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'
+                                }`}>
+                                  {nd.reason === 'always_pass' ? 'Always passes' : 'Always fails'}
+                                </span>
+                                <span className="text-muted-foreground">{nd.assertionDesc}</span>
+                                <span className="text-xs text-muted-foreground">({nd.caseCount} cases)</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {suiteAnalysis.highVariance && suiteAnalysis.highVariance.length > 0 && (
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
+                            <AlertTriangle className="h-3 w-3 text-orange-400" />
+                            High-variance assertions ({suiteAnalysis.highVariance.length})
+                          </p>
+                          <div className="space-y-1">
+                            {suiteAnalysis.highVariance.slice(0, 5).map((hv, i) => (
+                              <div key={i} className="text-sm flex items-center gap-2">
+                                <span className="px-1.5 py-0.5 rounded text-xs bg-orange-500/10 text-orange-400">
+                                  {(hv.passRate * 100).toFixed(0)}% pass rate
+                                </span>
+                                <span className="text-muted-foreground">{hv.assertionDesc}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })()}
+
               <div className="border border-border rounded-lg p-4">
                 <h3 className="font-medium mb-3">Raw Metrics JSON</h3>
                 <pre className="text-xs bg-black/30 p-3 rounded overflow-auto max-h-64">
@@ -456,6 +544,166 @@ export default function EvalRunDetailPage() {
                 </pre>
               </div>
             </>
+          )}
+        </div>
+      )}
+
+      {/* Outputs Tab */}
+      {tab === 'outputs' && (
+        <div className="space-y-4">
+          {run.caseRuns.length === 0 ? (
+            <div className="text-center text-muted-foreground py-8">No outputs yet.</div>
+          ) : (
+            run.caseRuns.map(cr => {
+              const output = (() => { try { return JSON.parse(cr.outputJson || '{}') as { result?: string } } catch { return {} } })()
+              const evalFeedback = (() => { try { return JSON.parse(cr.evalFeedbackJson || '{}') as { suggestions?: Array<{ assertion?: string; reason?: string }> } } catch { return {} } })()
+              const claims = (() => { try { return JSON.parse(cr.allClaimsJson || '[]') as Array<{ claim: string; verified: boolean; type: string; evidence: string }> } catch { return [] } })()
+              const humanFeedback = (() => { try { return JSON.parse(cr.feedbackJson || '{}') as { rating?: string; comment?: string } } catch { return {} } })()
+              const isExpanded = expandedOutputs.has(cr.id)
+              const currentFeedback = feedbackState[cr.id] ?? { rating: humanFeedback.rating ?? null, comment: humanFeedback.comment ?? '' }
+
+              return (
+                <div key={cr.id} className="border border-border rounded-lg overflow-hidden">
+                  {/* Header */}
+                  <div
+                    className="px-4 py-3 bg-muted/20 flex items-center justify-between cursor-pointer hover:bg-muted/30"
+                    onClick={() => setExpandedOutputs(prev => {
+                      const next = new Set(prev)
+                      if (next.has(cr.id)) next.delete(cr.id); else next.add(cr.id)
+                      return next
+                    })}
+                  >
+                    <div className="flex items-center gap-3">
+                      {cr.status === 'passed' ? <CheckCircle className="h-4 w-4 text-green-400" /> : <XCircle className="h-4 w-4 text-red-400" />}
+                      <span className="font-medium">{cr.evalCase.name}</span>
+                      <span className="text-xs text-muted-foreground font-mono">{cr.evalCase.key}</span>
+                      {evalFeedback.suggestions && evalFeedback.suggestions.length > 0 && (
+                        <span className="px-1.5 py-0.5 rounded text-xs bg-yellow-500/10 text-yellow-400 flex items-center gap-1">
+                          <AlertTriangle className="h-3 w-3" />
+                          {evalFeedback.suggestions.length} eval suggestion(s)
+                        </span>
+                      )}
+                    </div>
+                    {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                  </div>
+
+                  {isExpanded && (
+                    <div className="p-4 space-y-4">
+                      {/* Left/Right: Prompt + Expected vs Output */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">Prompt</p>
+                          <pre className="text-sm bg-black/20 p-3 rounded max-h-48 overflow-auto whitespace-pre-wrap">{cr.evalCase.prompt}</pre>
+                          {cr.evalCase.expectedOutcome && (
+                            <>
+                              <p className="text-xs text-muted-foreground mt-2 mb-1">Expected Outcome</p>
+                              <pre className="text-sm bg-black/20 p-3 rounded max-h-32 overflow-auto whitespace-pre-wrap">{cr.evalCase.expectedOutcome}</pre>
+                            </>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">Output</p>
+                          <div className="text-sm bg-black/20 p-3 rounded max-h-80 overflow-auto">
+                            <pre className="whitespace-pre-wrap">{output.result || 'No output'}</pre>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Eval feedback warnings */}
+                      {evalFeedback.suggestions && evalFeedback.suggestions.length > 0 && (
+                        <div className="border border-yellow-500/20 bg-yellow-500/5 rounded-lg p-3">
+                          <p className="text-xs font-semibold text-yellow-400 mb-2">Eval Quality Suggestions</p>
+                          <ul className="space-y-1">
+                            {evalFeedback.suggestions.map((s, i) => (
+                              <li key={i} className="text-sm text-muted-foreground">
+                                {s.assertion && <span className="font-mono text-xs text-yellow-400">[{s.assertion}] </span>}
+                                {s.reason}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Claims evidence panel */}
+                      {claims.length > 0 && (
+                        <div className="border border-border rounded-lg p-3">
+                          <p className="text-xs font-semibold text-muted-foreground mb-2">Extracted Claims ({claims.filter(c => c.verified).length}/{claims.length} verified)</p>
+                          <div className="space-y-1">
+                            {claims.map((c, i) => (
+                              <div key={i} className="flex items-start gap-2 text-sm">
+                                {c.verified ? <CheckCircle className="h-3 w-3 text-green-400 mt-0.5 shrink-0" /> : <XCircle className="h-3 w-3 text-red-400 mt-0.5 shrink-0" />}
+                                <div>
+                                  <span className="text-muted-foreground">{c.claim}</span>
+                                  <span className="text-xs text-muted-foreground ml-2">({c.type})</span>
+                                  {c.evidence && <p className="text-xs text-muted-foreground italic mt-0.5">{c.evidence}</p>}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Feedback form */}
+                      <div className="border border-border rounded-lg p-3">
+                        <p className="text-xs font-semibold text-muted-foreground mb-2">Human Feedback</p>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => {
+                              const newRating = currentFeedback.rating === 'good' ? null : 'good'
+                              setFeedbackState(prev => ({ ...prev, [cr.id]: { ...currentFeedback, rating: newRating } }))
+                              fetch(`/api/eval-runs/${runId}/feedback`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ caseRunId: cr.id, rating: newRating, comment: currentFeedback.comment }),
+                              })
+                            }}
+                            className={`flex items-center gap-1 px-2 py-1 rounded border text-sm ${
+                              currentFeedback.rating === 'good'
+                                ? 'border-green-500 bg-green-500/10 text-green-400'
+                                : 'border-border hover:bg-accent'
+                            }`}
+                          >
+                            <ThumbsUp className="h-3.5 w-3.5" /> Good
+                          </button>
+                          <button
+                            onClick={() => {
+                              const newRating = currentFeedback.rating === 'bad' ? null : 'bad'
+                              setFeedbackState(prev => ({ ...prev, [cr.id]: { ...currentFeedback, rating: newRating } }))
+                              fetch(`/api/eval-runs/${runId}/feedback`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ caseRunId: cr.id, rating: newRating, comment: currentFeedback.comment }),
+                              })
+                            }}
+                            className={`flex items-center gap-1 px-2 py-1 rounded border text-sm ${
+                              currentFeedback.rating === 'bad'
+                                ? 'border-red-500 bg-red-500/10 text-red-400'
+                                : 'border-border hover:bg-accent'
+                            }`}
+                          >
+                            <ThumbsDown className="h-3.5 w-3.5" /> Bad
+                          </button>
+                          <input
+                            type="text"
+                            placeholder="Add a comment..."
+                            value={currentFeedback.comment}
+                            onChange={e => setFeedbackState(prev => ({ ...prev, [cr.id]: { ...currentFeedback, comment: e.target.value } }))}
+                            onBlur={() => {
+                              fetch(`/api/eval-runs/${runId}/feedback`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ caseRunId: cr.id, rating: currentFeedback.rating, comment: currentFeedback.comment }),
+                              })
+                            }}
+                            className="flex-1 bg-muted/30 border border-border rounded px-2 py-1 text-sm"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })
           )}
         </div>
       )}
