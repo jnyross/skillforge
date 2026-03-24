@@ -540,7 +540,7 @@ export default function ImprovePage() {
                     ? `${selectedIteration.avgDelta > 0 ? '+' : ''}${selectedIteration.avgDelta.toFixed(2)}`
                     : 'N/A'}
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">Avg {terms.delta}</p>
+                <p className="text-xs text-muted-foreground mt-1">Avg {toTitleCase(terms.delta)}</p>
               </div>
               <div className="border border-border rounded-lg p-4 text-center">
                 <p className="text-3xl font-bold text-foreground">

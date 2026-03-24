@@ -201,7 +201,7 @@ export default function ComparisonPage() {
             <p className={`text-3xl font-bold ${deltaColor(data.summary.avgDelta)}`}>
               {data.summary.avgDelta > 0 ? '+' : ''}{data.summary.avgDelta}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">Avg {terms.delta}</p>
+            <p className="text-xs text-muted-foreground mt-1">Avg {toTitleCase(terms.delta)}</p>
           </div>
           <div className="border border-border rounded-lg p-4 text-center">
             <p className="text-3xl font-bold">{data.summary.avgSkillScore}</p>
