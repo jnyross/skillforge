@@ -343,6 +343,11 @@ export default function ImprovePage() {
             <select
               value={selectedVersionId}
               onChange={(e) => {
+                if (pollingId) {
+                  clearInterval(pollingId)
+                  setPollingId(null)
+                  setRunning(false)
+                }
                 setSelectedVersionId(e.target.value)
                 setSelectedIteration(null)
                 setIterations([])
