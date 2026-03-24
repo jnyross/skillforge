@@ -29,7 +29,7 @@ export async function executeBaseline(
   prompt: string,
   executorConfig: ExecutorConfig
 ): Promise<BaselineOutput> {
-  const executor = createExecutor('claude-cli')
+  const executor = createExecutor((executorConfig as { type?: string }).type === 'mock' ? 'mock' : 'claude-cli')
 
   // Create a bare workspace with NO skill files
   const workspaceId = uuid()

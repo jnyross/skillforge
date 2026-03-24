@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   ChevronLeft, CheckCircle, XCircle, Clock, AlertCircle,
-  Loader2, Activity, BarChart3, RotateCcw, ArrowUpRight
+  Loader2, Activity, BarChart3, RotateCcw, ArrowUpRight, Scale
 } from 'lucide-react'
 
 interface EvalRunDetail {
@@ -263,6 +263,14 @@ export default function EvalRunDetailPage() {
         <button onClick={() => setTab('traces')} className={`pb-2 text-sm font-medium border-b-2 ${tab === 'traces' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
           <Activity className="h-4 w-4 inline mr-1" /> Traces ({traces.length})
         </button>
+        {run.status === 'completed' && (
+          <Link
+            href={`/evals/runs/${runId}/comparison`}
+            className="pb-2 text-sm font-medium border-b-2 border-transparent text-muted-foreground hover:text-foreground flex items-center gap-1"
+          >
+            <Scale className="h-4 w-4" /> Blind Comparison
+          </Link>
+        )}
       </div>
 
       {/* Case Results */}

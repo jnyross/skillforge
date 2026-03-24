@@ -70,6 +70,7 @@ export default function ComparisonPage() {
   const [running, setRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [expandedCase, setExpandedCase] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const loadComparisons = useCallback(async () => {
     const res = await fetch(`/api/eval-runs/${runId}/compare`)
@@ -136,25 +137,42 @@ export default function ComparisonPage() {
             <h1 className="text-2xl font-bold">Blind Comparison</h1>
             <span className="text-sm text-muted-foreground font-mono">{runId.slice(0, 8)}</span>
           </div>
-          {!hasComparisons && (
-            <button
-              onClick={handleRunComparisons}
-              disabled={running}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
-            >
-              {running ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Running comparisons...
-                </>
-              ) : (
-                <>
-                  <Play className="h-4 w-4" />
-                  Run Blind Comparisons
-                </>
-              )}
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {hasComparisons && (
+              <button
+                onClick={async () => {
+                  setDeleting(true)
+                  setError(null)
+                  await fetch(`/api/eval-runs/${runId}/compare`, { method: 'DELETE' })
+                  setDeleting(false)
+                  await loadComparisons()
+                }}
+                disabled={deleting || running}
+                className="flex items-center gap-2 px-4 py-2 border border-border rounded-md text-sm hover:bg-accent disabled:opacity-50"
+              >
+                {deleting ? 'Deleting...' : 'Clear & Re-run'}
+              </button>
+            )}
+            {!hasComparisons && (
+              <button
+                onClick={handleRunComparisons}
+                disabled={running}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
+              >
+                {running ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Running comparisons...
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-4 w-4" />
+                    Run Blind Comparisons
+                  </>
+                )}
+              </button>
+            )}
+          </div>
         </div>
         <p className="text-sm text-muted-foreground mt-2">
           Each eval case is re-executed without the skill (baseline), then a blind comparator

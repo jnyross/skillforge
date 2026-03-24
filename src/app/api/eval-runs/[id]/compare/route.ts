@@ -103,11 +103,12 @@ export async function POST(
     )
   }
 
-  const executorConfig: ExecutorConfig = {
+  const executorConfig: ExecutorConfig & { type?: string } = {
     model: evalRun.model,
     effort: evalRun.effort as ExecutorConfig['effort'],
     maxTurns: evalRun.maxTurns,
     permissionMode: evalRun.permissionMode as ExecutorConfig['permissionMode'],
+    type: evalRun.executorType,
   }
 
   const results: Array<{ caseRunId: string; winner: string; delta: number }> = []
@@ -225,4 +226,24 @@ export async function POST(
         : 0,
     },
   }, { status: 201 })
+}
+
+/**
+ * DELETE /api/eval-runs/[id]/compare
+ * Deletes all blind comparisons for an eval run so they can be re-run.
+ */
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id: evalRunId } = await params
+
+  const deleted = await prisma.blindComparison.deleteMany({
+    where: { evalRunId },
+  })
+
+  return NextResponse.json({
+    deleted: deleted.count,
+    message: `Deleted ${deleted.count} comparison(s). You can now re-run comparisons.`,
+  })
 }
