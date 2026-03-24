@@ -1,72 +1,82 @@
 # Testing SkillForge
 
-## Overview
-SkillForge is a Next.js 14 app (TypeScript, Tailwind, shadcn/ui, Prisma ORM, SQLite dev DB). Dev server runs on port 3001.
+## Prerequisites
 
-## Setup
+- Node.js 18+ and npm installed
+- Claude Code CLI installed and authenticated (`claude --version` to verify)
+- Anthropic API key set as `ANTHROPIC_API_KEY` environment variable (needed for wizard generation, eval builder chat, synthetic data, judge calibration)
+
+## Devin Secrets Needed
+
+- `ANTHROPIC_API_KEY` — Anthropic API key for SDK-based features (wizard, eval builder, synthetic data, judges)
+- Claude CLI authentication — handled via user subscription login (`claude` command must be on PATH)
+
+## Starting the Dev Server
+
 ```bash
 cd /home/ubuntu/repos/skillforge
-npm install
-npx prisma generate
-npx prisma db push
-npm run dev  # starts on port 3001
+npx prisma migrate deploy   # ensure DB schema is up to date
+npm run dev                  # starts on port 3000 (or 3001 if 3000 is busy)
 ```
+
+## Test Data Setup
+
+Before testing eval runs, you need:
+1. A skill repo: `POST /api/skill-repos` with `{"displayName": "...", "slug": "..."}`
+2. A version: `POST /api/skill-repos/:id/versions` with `{"message": "...", "files": [{"path": "SKILL.md", "content": "..."}]}`
+3. An eval suite: `POST /api/eval-suites` with `{"name": "...", "type": "output", "skillRepoId": "..."}`
+4. An eval case: `POST /api/eval-suites/:id/cases` with `{"key": "...", "name": "...", "prompt": "...", "expectedOutcome": "...", "split": "train"}`
+
+Alternatively, the Wizard flow creates all of this automatically.
 
 ## Key Testing Flows
 
-### Eval Runs (Real Claude CLI vs Mock)
-- **Default executor**: UI defaults to "Claude CLI" (first option in dropdown). If Claude CLI is not available, fall back to "Mock (Testing)".
-- **Real Claude CLI runs** take 2-30+ seconds per case (depending on prompt complexity). Mock runs complete instantly.
-- **Distinguishing real vs mock output**:
-  - Executor card: "claude-cli" vs "mock"
-  - Model: real model name like "claude-sonnet-4-20250514" vs "mock-model"
-  - Duration: real runs > 1s, mock runs ~0s
-  - Cost: real cost varies (e.g. $0.0043 for simple math, $0.0498 for code gen) vs mock fixed $0.0010
-  - Tokens: real token counts with input/output breakdown vs mock fixed values
-  - Output: natural language / real code vs mock synthetic pattern text
+### 1. Eval Run with Claude CLI
 
-### Trace Verification
-- Navigate to trace detail via eval run → Case Results → "View Trace"
-- Check 5 info cards: Duration, Model, Tokens (X in / Y out), Cost, Context
-- Output tab shows the actual Claude response text
-- "Promote to Regression" button available on trace detail page
+- Navigate to `/evals`, click a suite, click "Run Eval"
+- **Verify**: Executor dropdown defaults to "Claude CLI" (not "Mock")
+- **Verify**: Model dropdown defaults to "Claude Opus 4.6"
+- Select a version and click "Start Run"
+- Wait for completion (real CLI calls take 5-60s per case)
+- Click on the completed run to view details
+- **Verify**: `executorType` shows `claude-cli`, `model` shows `claude-opus-4-6`
+- Click on traces to verify model name from CLI output
+- **Key signal**: Duration >5s confirms real CLI (mock is <100ms)
 
-### Health Check API
-- `GET /api/executor-health` returns JSON with status of each executor
-- Expected response: `{"claude-cli":{"ok":true,"version":"X.Y.Z (Claude Code)"},"mock":{"ok":true,"version":"mock-1.0.0"}}`
-- If Claude CLI is not installed/authenticated, `claude-cli.ok` will be `false` with error message
+### 2. Wizard Skill Generation + Smoke Test
 
-### Eval Suite Testing
-1. Navigate to `/evals` → click suite → "Add Case" to create test cases
-2. For output suites: provide Key, Name, Prompt, Expected Outcome
-3. Click "Run Eval" → select version, executor (Claude CLI or Mock), model
-4. Run auto-refreshes every 3s until completion
-5. Check Case Results tab for pass/fail assertions
-6. Check Traces tab for execution details
+- Navigate to `/wizard`, select "From Scratch"
+- Fill intent and at least one concrete example
+- Click "Generate Skill" — takes ~30-60s for real Anthropic API call
+- **Verify**: Generated SKILL.md has real content with frontmatter
+- Save the skill, then click "Run Smoke Eval"
+- **Verify**: Smoke test uses `claude-cli` executor (shown in description text)
+- Wait up to 3 minutes for completion (timeout was increased from 60s to 180s)
+- **Verify**: Smoke test shows completion status with pass rate
 
-### Optimizer Testing
-- Create optimizer run from `/optimizer` page
-- Requires: repo, skill version, at least one eval suite selected
-- Uses real Anthropic API for mutations (even when eval executor is mock)
-- Candidates appear with mutation type badges and objective scores
-- Stop button works mid-run; status correctly shows "stopped" (not "completed")
+### 3. Eval Builder Chat
 
-### Review Arena Testing
-- Create review session from `/reviews` page (pass-fail or comparison type)
-- Active review UI has keyboard shortcuts (P/F for pass/fail, arrows for navigation, ? for help)
-- Critiques capture category, severity, confidence
+- Navigate to `/eval-builder`, click "New Conversation"
+- Send a message describing what evals to create
+- **Verify**: Response takes ~10-20s (real Anthropic API, not instant mock)
+- **Verify**: Response is contextual and intelligent (not generic placeholder)
 
-### Judge Calibration Testing
-- Create judge from `/judges` page
-- Add prompt versions and validation examples
-- Calibration runs use real Anthropic API to evaluate examples
-- Judge auto-promotes to "calibrated" at ≥70% agreement with ≥5 examples
+### 4. Settings Page
 
-## Devin Secrets Needed
-- `ANTHROPIC_API_KEY` — needed for judge calibration and optimizer mutations (or use Claude subscription login for CLI executor)
+- Navigate to `/settings`
+- **Verify**: Executor type defaults to "Claude CLI" in the add executor form
 
 ## Common Issues
-- If dev server shows old code after a branch merge, restart it (`Ctrl+C` then `npm run dev`)
-- Claude CLI may include trailing escape codes in JSON output (e.g. "9;4;0;") — the executor's `extractJson` method handles this
-- Eval runs with 2+ cases run sequentially; total duration = sum of individual case durations
-- The `--bare` flag on Claude CLI requires `--add-dir` to provide workspace access for skill files
+
+- **Port 3000 in use**: Dev server will auto-fallback to 3001. Check terminal output.
+- **Smoke test timeout**: If Claude CLI is slow (>3 min for all cases), the smoke test may show "error" status. The timeout is 90 polls x 2s = 180s.
+- **Trigger eval pass rate**: Trigger suites test whether Claude's response "triggers" — low pass rates (25-50%) are normal for trigger detection.
+- **Pre-existing test failures**: `git-storage.test.ts` has 5-6 known flaky tests due to test isolation issues. These are unrelated to executor/model changes.
+- **Database migration**: If you see errors about missing tables, run `npx prisma migrate deploy` before starting the server.
+
+## Architecture Notes
+
+- **Executor selection**: `createExecutor(type)` in `src/lib/services/executor/index.ts` maps `'claude-cli'` → `ClaudeCliExecutor`, `'mock'` → `MockExecutor`
+- **Model configuration**: Default model is set in `src/lib/config.ts` (`defaultModel`). Individual services may override this.
+- **Job queue**: Eval runs use an in-process job queue (`src/lib/services/job-queue.ts`). Jobs are processed inline via `setImmediate()`.
+- **Trace model field**: Populated from Claude CLI's `modelUsage` keys in the JSON output — this is the most reliable way to verify which model was actually used.
