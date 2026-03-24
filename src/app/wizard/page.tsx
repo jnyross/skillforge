@@ -2,6 +2,9 @@
 
 import { useState } from 'react'
 import { Wand2, ArrowRight, ArrowLeft, Plus, X, Loader2, AlertTriangle, Check, FileText, TestTube, Sparkles } from 'lucide-react'
+import { ConversationalIntake } from '@/components/wizard/conversational-intake'
+import type { InterviewContext } from '@/lib/services/wizard/interview-service'
+import { interviewAnswersToWizardInput } from '@/lib/services/wizard/interview-service'
 
 type WizardMode = 'extract' | 'synthesize' | 'hybrid' | 'scratch'
 type WizardStep = 'mode' | 'intake' | 'generating' | 'review' | 'saving' | 'saved'
@@ -115,6 +118,9 @@ export default function WizardPage() {
   const [drafts, setDrafts] = useState<Array<{ id: string; intent: string; mode: string; status: string; createdAt: string }>>([])
   const [showDrafts, setShowDrafts] = useState(false)
 
+  // Interview state (PR 1: Conversational Intent Capture)
+  const [interviewContext, setInterviewContext] = useState<InterviewContext | null>(null)
+
   const addArtifact = () => {
     if (!newArtifactName.trim() || !newArtifactContent.trim()) return
     setArtifacts(prev => [...prev, {
@@ -130,6 +136,105 @@ export default function WizardPage() {
 
   const removeArtifact = (index: number) => {
     setArtifacts(prev => prev.filter((_, i) => i !== index))
+  }
+
+  // Handle interview completion — extract answers and trigger generation
+  const handleInterviewComplete = (ctx: InterviewContext) => {
+    setInterviewContext(ctx)
+    const wizardInput = interviewAnswersToWizardInput(ctx)
+    setIntent(wizardInput.intent)
+    setConcreteExamples(wizardInput.concreteExamples)
+    if (wizardInput.desiredOutputFormat) setDesiredOutputFormat(wizardInput.desiredOutputFormat)
+    // Now trigger generation
+    handleGenerateFromInterview(ctx)
+  }
+
+  const handleGenerateFromInterview = async (ctx: InterviewContext) => {
+    const wizardInput = interviewAnswersToWizardInput(ctx)
+    if (!wizardInput.intent.trim()) return
+    setError('')
+    setStep('generating')
+
+    try {
+      let currentDraftId = draftId
+
+      const draftPayload = {
+        intent: wizardInput.intent.trim(),
+        artifactsJson: artifacts,
+        mode: mode || 'scratch',
+        concreteExamples: JSON.stringify(wizardInput.concreteExamples.filter(Boolean)),
+        freedomLevel,
+        configJson: JSON.stringify({
+          ...(corrections.trim() ? { corrections: corrections.trim().split('\n').filter(Boolean) } : {}),
+          ...(wizardInput.desiredOutputFormat.trim() ? { desiredOutputFormat: wizardInput.desiredOutputFormat.trim() } : {}),
+          ...(safetyConstraints.trim() ? { safetyConstraints: safetyConstraints.trim() } : {}),
+          ...(allowedTools.trim() ? { allowedTools: allowedTools.split(',').map((t: string) => t.trim()).filter(Boolean) } : {}),
+        }),
+        interviewTranscript: wizardInput.interviewTranscript,
+        extractedAnswersJson: JSON.stringify(ctx.extractedAnswers),
+        interviewContextJson: JSON.stringify(ctx),
+      }
+
+      if (currentDraftId) {
+        const patchRes = await fetch(`/api/wizard/draft/${currentDraftId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(draftPayload),
+        })
+        if (!patchRes.ok) throw new Error('Failed to update draft')
+      } else {
+        const draftRes = await fetch('/api/wizard/draft', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(draftPayload),
+        })
+        if (!draftRes.ok) throw new Error('Failed to create draft')
+        const draft = await draftRes.json()
+        currentDraftId = draft.id
+        setDraftId(draft.id)
+      }
+
+      // Generate skill
+      const genRes = await fetch(`/api/wizard/draft/${currentDraftId}/generate`, {
+        method: 'POST',
+      })
+      if (!genRes.ok) {
+        const errData = await genRes.json()
+        throw new Error(errData.error || 'Generation failed')
+      }
+      const genData = await genRes.json()
+      setGenerated(genData.generated)
+      setEditedSkillMd(genData.generated.skillMd)
+
+      const nameMatch = genData.generated.skillMd.match(/^name:\s*(.+)$/m)
+      if (nameMatch) {
+        setRepoName(nameMatch[1].trim().replace(/^["']|["']$/g, '').replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()))
+      }
+
+      try {
+        const lintRes = await fetch('/api/skill-repos/lint', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: genData.generated.skillMd }),
+        })
+        if (lintRes.ok) {
+          const lintData = await lintRes.json()
+          setLintResults({
+            errors: lintData.errorCount ?? 0,
+            warnings: lintData.warningCount ?? 0,
+            infos: lintData.infoCount ?? 0,
+            details: (lintData.results ?? []).slice(0, 10).map((r: { severity: string; message: string }) => ({ severity: r.severity, message: r.message })),
+          })
+        }
+      } catch {
+        // lint is optional
+      }
+
+      setStep('review')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Generation failed')
+      setStep('intake')
+    }
   }
 
   const handleGenerate = async () => {
@@ -315,6 +420,7 @@ export default function WizardPage() {
     setLintResults(null)
     setDraftId(null)
     setGenerated(null)
+    setInterviewContext(null)
     setEditedSkillMd('')
     setRepoName('')
     setSaveResult(null)
@@ -537,7 +643,7 @@ export default function WizardPage() {
         </div>
       )}
 
-      {/* Step 2: Intake */}
+      {/* Step 2: Intake — Conversational Interview */}
       {step === 'intake' && mode && (
         <div className="space-y-6">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -548,262 +654,105 @@ export default function WizardPage() {
             <span>Mode: {MODE_INFO[mode].title}</span>
           </div>
 
-          {/* Intent */}
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              What should this skill do? *
-            </label>
-            <textarea
-              value={intent}
-              onChange={e => setIntent(e.target.value)}
-              placeholder="Describe what you want the skill to accomplish. Be specific about the trigger conditions, the steps involved, and the expected output..."
-              rows={4}
-              className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm resize-y"
-            />
-          </div>
+          <ConversationalIntake
+            mode={mode}
+            onComplete={handleInterviewComplete}
+            initialContext={interviewContext}
+          />
 
-          {/* Concrete Examples (Step 1 of Skill Creator methodology) */}
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              Concrete Usage Examples
-            </label>
-            <p className="text-xs text-muted-foreground mb-2">
-              Provide 3-5 real scenarios where this skill would be used. These ground the skill in practical use cases.
-            </p>
-            {concreteExamples.map((ex, i) => (
-              <div key={i} className="flex items-center gap-2 mb-2">
-                <span className="text-xs text-muted-foreground w-4">{i + 1}.</span>
-                <input
-                  value={ex}
-                  onChange={e => {
-                    const updated = [...concreteExamples]
-                    updated[i] = e.target.value
-                    setConcreteExamples(updated)
-                  }}
-                  className="flex-1 px-2 py-1.5 bg-background border border-border rounded text-sm"
-                />
-                <button onClick={() => setConcreteExamples(prev => prev.filter((_, j) => j !== i))} className="p-1 hover:bg-accent rounded">
-                  <X className="h-3 w-3" />
+          {/* Artifacts section — available for non-scratch modes */}
+          {mode !== 'scratch' && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium">
+                  Artifacts *
+                </label>
+                <button
+                  onClick={() => setShowArtifactForm(true)}
+                  className="flex items-center gap-1 px-2 py-1 text-xs border border-border rounded hover:bg-accent"
+                >
+                  <Plus className="h-3 w-3" /> Add Artifact
                 </button>
               </div>
-            ))}
-            <div className="flex items-center gap-2">
-              <input
-                value={newExample}
-                onChange={e => setNewExample(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && newExample.trim()) {
-                    setConcreteExamples(prev => [...prev, newExample.trim()])
-                    setNewExample('')
-                  }
-                }}
-                placeholder="Type a usage example and press Enter..."
-                className="flex-1 px-2 py-1.5 bg-background border border-border rounded text-sm"
-              />
-              <button
-                onClick={() => {
-                  if (newExample.trim()) {
-                    setConcreteExamples(prev => [...prev, newExample.trim()])
-                    setNewExample('')
-                  }
-                }}
-                disabled={!newExample.trim()}
-                className="flex items-center gap-1 px-2 py-1.5 text-xs border border-border rounded hover:bg-accent disabled:opacity-50"
-              >
-                <Plus className="h-3 w-3" /> Add
-              </button>
-            </div>
-          </div>
 
-          {/* Freedom Level (Degrees of Freedom) */}
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              Specificity Level
-            </label>
-            <p className="text-xs text-muted-foreground mb-2">
-              How much freedom should the agent have when following this skill?
-            </p>
-            <div className="grid grid-cols-3 gap-3">
-              {(['high', 'medium', 'low'] as const).map(level => (
-                <button
-                  key={level}
-                  onClick={() => setFreedomLevel(level)}
-                  className={`border rounded-lg p-3 text-left transition-colors ${
-                    freedomLevel === level
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border hover:bg-accent/50'
-                  }`}
-                >
-                  <p className="text-sm font-medium capitalize">{level} Freedom</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {level === 'high' && 'Text instructions, multiple valid approaches'}
-                    {level === 'medium' && 'Pseudocode, parameterized steps'}
-                    {level === 'low' && 'Exact scripts, minimal flexibility'}
-                  </p>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Artifacts */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-medium">
-                Artifacts {mode !== 'scratch' ? '*' : '(optional)'}
-              </label>
-              <button
-                onClick={() => setShowArtifactForm(true)}
-                className="flex items-center gap-1 px-2 py-1 text-xs border border-border rounded hover:bg-accent"
-              >
-                <Plus className="h-3 w-3" /> Add Artifact
-              </button>
-            </div>
-
-            {artifacts.length > 0 && (
-              <div className="space-y-2 mb-3">
-                {artifacts.map((a, i) => (
-                  <div key={i} className="flex items-center justify-between border border-border rounded p-3">
-                    <div>
-                      <span className="text-sm font-medium">{a.name}</span>
-                      <span className="ml-2 text-xs bg-secondary px-1.5 py-0.5 rounded">{a.type}</span>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {a.content.length} chars
-                      </p>
+              {artifacts.length > 0 && (
+                <div className="space-y-2 mb-3">
+                  {artifacts.map((a, i) => (
+                    <div key={i} className="flex items-center justify-between border border-border rounded p-3">
+                      <div>
+                        <span className="text-sm font-medium">{a.name}</span>
+                        <span className="ml-2 text-xs bg-secondary px-1.5 py-0.5 rounded">{a.type}</span>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {a.content.length} chars
+                        </p>
+                      </div>
+                      <button onClick={() => removeArtifact(i)} className="p-1 hover:bg-accent rounded">
+                        <X className="h-3 w-3" />
+                      </button>
                     </div>
-                    <button onClick={() => removeArtifact(i)} className="p-1 hover:bg-accent rounded">
+                  ))}
+                </div>
+              )}
+
+              {artifacts.length === 0 && (
+                <p className="text-sm text-muted-foreground mb-3">
+                  Add documentation, runbooks, APIs, code samples, or example outputs to ground the generated skill.
+                </p>
+              )}
+
+              {/* Add artifact form */}
+              {showArtifactForm && (
+                <div className="border border-border rounded-lg p-4 space-y-3 bg-card">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-medium">Add Artifact</h4>
+                    <button onClick={() => setShowArtifactForm(false)} className="p-1 hover:bg-accent rounded">
                       <X className="h-3 w-3" />
                     </button>
                   </div>
-                ))}
-              </div>
-            )}
-
-            {artifacts.length === 0 && mode !== 'scratch' && (
-              <p className="text-sm text-muted-foreground mb-3">
-                Add documentation, runbooks, APIs, code samples, or example outputs to ground the generated skill.
-              </p>
-            )}
-
-            {/* Add artifact form */}
-            {showArtifactForm && (
-              <div className="border border-border rounded-lg p-4 space-y-3 bg-card">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-medium">Add Artifact</h4>
-                  <button onClick={() => setShowArtifactForm(false)} className="p-1 hover:bg-accent rounded">
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-muted-foreground mb-1">Name</label>
+                      <input
+                        value={newArtifactName}
+                        onChange={e => setNewArtifactName(e.target.value)}
+                        placeholder="e.g., API Reference"
+                        className="w-full px-2 py-1.5 bg-background border border-border rounded text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-muted-foreground mb-1">Type</label>
+                      <select
+                        value={newArtifactType}
+                        onChange={e => setNewArtifactType(e.target.value)}
+                        className="w-full px-2 py-1.5 bg-background border border-border rounded text-sm"
+                      >
+                        {ARTIFACT_TYPES.map(t => (
+                          <option key={t.value} value={t.value}>{t.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
                   <div>
-                    <label className="block text-xs text-muted-foreground mb-1">Name</label>
-                    <input
-                      value={newArtifactName}
-                      onChange={e => setNewArtifactName(e.target.value)}
-                      placeholder="e.g., API Reference"
-                      className="w-full px-2 py-1.5 bg-background border border-border rounded text-sm"
+                    <label className="block text-xs text-muted-foreground mb-1">Content</label>
+                    <textarea
+                      value={newArtifactContent}
+                      onChange={e => setNewArtifactContent(e.target.value)}
+                      placeholder="Paste the artifact content here..."
+                      rows={6}
+                      className="w-full px-2 py-1.5 bg-background border border-border rounded text-sm font-mono resize-y"
                     />
                   </div>
-                  <div>
-                    <label className="block text-xs text-muted-foreground mb-1">Type</label>
-                    <select
-                      value={newArtifactType}
-                      onChange={e => setNewArtifactType(e.target.value)}
-                      className="w-full px-2 py-1.5 bg-background border border-border rounded text-sm"
-                    >
-                      {ARTIFACT_TYPES.map(t => (
-                        <option key={t.value} value={t.value}>{t.label}</option>
-                      ))}
-                    </select>
-                  </div>
+                  <button
+                    onClick={addArtifact}
+                    disabled={!newArtifactName.trim() || !newArtifactContent.trim()}
+                    className="px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    Add
+                  </button>
                 </div>
-                <div>
-                  <label className="block text-xs text-muted-foreground mb-1">Content</label>
-                  <textarea
-                    value={newArtifactContent}
-                    onChange={e => setNewArtifactContent(e.target.value)}
-                    placeholder="Paste the artifact content here..."
-                    rows={6}
-                    className="w-full px-2 py-1.5 bg-background border border-border rounded text-sm font-mono resize-y"
-                  />
-                </div>
-                <button
-                  onClick={addArtifact}
-                  disabled={!newArtifactName.trim() || !newArtifactContent.trim()}
-                  className="px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm hover:bg-primary/90 disabled:opacity-50"
-                >
-                  Add
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Additional fields */}
-          <div className="space-y-4">
-            <details className="border border-border rounded-lg">
-              <summary className="px-4 py-3 text-sm font-medium cursor-pointer hover:bg-accent/50 rounded-lg">
-                Advanced Options
-              </summary>
-              <div className="px-4 pb-4 space-y-4">
-                <div>
-                  <label className="block text-xs text-muted-foreground mb-1">
-                    Corrections / Gotchas (one per line)
-                  </label>
-                  <textarea
-                    value={corrections}
-                    onChange={e => setCorrections(e.target.value)}
-                    placeholder="Things that commonly go wrong or need special handling..."
-                    rows={3}
-                    className="w-full px-2 py-1.5 bg-background border border-border rounded text-sm resize-y"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-muted-foreground mb-1">
-                    Desired Output Format
-                  </label>
-                  <textarea
-                    value={desiredOutputFormat}
-                    onChange={e => setDesiredOutputFormat(e.target.value)}
-                    placeholder="Describe the expected output format (e.g., markdown with code blocks, JSON, etc.)..."
-                    rows={2}
-                    className="w-full px-2 py-1.5 bg-background border border-border rounded text-sm resize-y"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-muted-foreground mb-1">
-                    Safety Constraints
-                  </label>
-                  <textarea
-                    value={safetyConstraints}
-                    onChange={e => setSafetyConstraints(e.target.value)}
-                    placeholder="Any restrictions on what the skill should NOT do..."
-                    rows={2}
-                    className="w-full px-2 py-1.5 bg-background border border-border rounded text-sm resize-y"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-muted-foreground mb-1">
-                    Allowed Tools (comma-separated)
-                  </label>
-                  <input
-                    value={allowedTools}
-                    onChange={e => setAllowedTools(e.target.value)}
-                    placeholder="e.g., Read, Write, Bash, Browser"
-                    className="w-full px-2 py-1.5 bg-background border border-border rounded text-sm"
-                  />
-                </div>
-              </div>
-            </details>
-          </div>
-
-          {/* Generate button */}
-          <button
-            onClick={handleGenerate}
-            disabled={!intent.trim() || (mode !== 'scratch' && artifacts.length === 0)}
-            className="w-full px-4 py-3 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            <Sparkles className="h-4 w-4" />
-            Generate Skill
-          </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 

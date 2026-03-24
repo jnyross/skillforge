@@ -33,6 +33,14 @@ export interface WizardInput {
   desiredOutputFormat?: string
   safetyConstraints?: string
   allowedTools?: string[]
+  /** Interview transcript from conversational intake (PR 1) */
+  interviewTranscript?: string
+  /** Structured answers extracted from interview (PR 1) */
+  extractedAnswers?: Array<{
+    questionKey: string
+    answer: string
+    confidence: string
+  }>
 }
 
 export interface WizardArtifact {
@@ -224,6 +232,18 @@ function buildGenerationPrompt(input: WizardInput): string {
 
   if (input.allowedTools && input.allowedTools.length > 0) {
     prompt += `## Allowed Tools\n${input.allowedTools.join(', ')}\n\n`
+  }
+
+  // Interview transcript from conversational intake (PR 1)
+  if (input.interviewTranscript) {
+    prompt += `## Interview Transcript\nThe following is a structured interview with the user about this skill:\n\`\`\`\n${input.interviewTranscript.slice(0, 6000)}\n\`\`\`\n\n`
+  }
+
+  if (input.extractedAnswers && input.extractedAnswers.length > 0) {
+    prompt += `## Structured Interview Answers\n`
+    for (const answer of input.extractedAnswers) {
+      prompt += `### ${answer.questionKey} (confidence: ${answer.confidence})\n${answer.answer}\n\n`
+    }
   }
 
   prompt += `## Required Output
