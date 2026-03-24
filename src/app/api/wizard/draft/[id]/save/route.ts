@@ -39,8 +39,8 @@ export async function POST(
 
   // Parse generated evals
   let generatedEvals: {
-    triggerSuite?: { name: string; cases: Array<{ key: string; name: string; prompt: string; shouldTrigger?: boolean; expectedOutcome?: string; assertionType?: string; assertionValue?: string; split: string; tags?: string[] }> }
-    outputSuite?: { name: string; cases: Array<{ key: string; name: string; prompt: string; expectedOutcome?: string; assertionType?: string; assertionValue?: string; split: string; tags?: string[] }> }
+    triggerSuite?: { name: string; cases: Array<{ key: string; name: string; prompt: string; shouldTrigger?: boolean; expectedOutcome?: string; assertionType?: string; assertionValue?: string; semanticAssertions?: Array<{ type: string; description: string; criterion: string; dimension: string; discriminating_note?: string }>; split: string; tags?: string[] }> }
+    outputSuite?: { name: string; cases: Array<{ key: string; name: string; prompt: string; expectedOutcome?: string; assertionType?: string; assertionValue?: string; semanticAssertions?: Array<{ type: string; description: string; criterion: string; dimension: string; discriminating_note?: string }>; split: string; tags?: string[] }> }
     files?: Array<{ path: string; content: string }>
   } = {}
   try {
@@ -171,6 +171,9 @@ export async function POST(
               assertions: c.assertionType && c.assertionValue
                 ? [{ type: c.assertionType, value: c.assertionValue }]
                 : [],
+              ...(c.semanticAssertions && c.semanticAssertions.length > 0
+                ? { semanticAssertions: c.semanticAssertions }
+                : {}),
             }),
           },
         })
