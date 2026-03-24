@@ -148,13 +148,13 @@ export async function gradeAllSemanticAssertions(
 export function detectProgrammaticAssertion(
   assertion: SemanticAssertion,
 ): { type: 'json_valid' | 'contains' | 'regex' | 'file_exists'; target?: string; expected?: string; script?: string } | null {
-  const desc = assertion.description.toLowerCase()
-  const criterion = assertion.criterion.toLowerCase()
+  const descLower = assertion.description.toLowerCase()
+  const criterionLower = assertion.criterion.toLowerCase()
 
   // JSON validity detection
   if (
-    /valid json/i.test(desc) || /valid json/i.test(criterion) ||
-    /returns?\s+json/i.test(desc) || /parseable?\s+json/i.test(desc)
+    /valid json/i.test(descLower) || /valid json/i.test(criterionLower) ||
+    /returns?\s+json/i.test(descLower) || /parseable?\s+json/i.test(descLower)
   ) {
     return {
       type: 'json_valid',
@@ -163,8 +163,9 @@ export function detectProgrammaticAssertion(
   }
 
   // String contains detection — "should contain X", "must include X", "mentions X"
-  const containsMatch = desc.match(/(?:should |must |needs to )?(?:contain|include|mention|have)\s+["']([^"']+)["']/i)
-    || criterion.match(/(?:should |must |needs to )?(?:contain|include|mention|have)\s+["']([^"']+)["']/i)
+  // Use original strings for extraction to preserve case in captured values
+  const containsMatch = assertion.description.match(/(?:should |must |needs to )?(?:contain|include|mention|have)\s+["']([^"']+)["']/i)
+    || assertion.criterion.match(/(?:should |must |needs to )?(?:contain|include|mention|have)\s+["']([^"']+)["']/i)
   if (containsMatch) {
     const needle = containsMatch[1]
     return {
@@ -175,8 +176,9 @@ export function detectProgrammaticAssertion(
   }
 
   // Regex match detection — "matches pattern /X/", "matches regex X"
-  const regexMatch = desc.match(/match(?:es)?\s+(?:pattern|regex)\s+\/([^/]+)\//i)
-    || criterion.match(/match(?:es)?\s+(?:pattern|regex)\s+\/([^/]+)\//i)
+  // Use original strings to preserve case in regex patterns
+  const regexMatch = assertion.description.match(/match(?:es)?\s+(?:pattern|regex)\s+\/([^/]+)\//i)
+    || assertion.criterion.match(/match(?:es)?\s+(?:pattern|regex)\s+\/([^/]+)\//i)
   if (regexMatch) {
     const pattern = regexMatch[1]
     return {
@@ -187,14 +189,15 @@ export function detectProgrammaticAssertion(
   }
 
   // File existence detection — "file X should exist", "creates file X"
-  const fileMatch = desc.match(/(?:file|creates?)\s+["']?([^\s"']+)["']?\s+(?:should |must )?exist/i)
-    || criterion.match(/(?:file|creates?)\s+["']?([^\s"']+)["']?\s+(?:should |must )?exist/i)
+  // Use original strings to preserve case in file paths (important on case-sensitive filesystems)
+  const fileMatch = assertion.description.match(/(?:file|creates?)\s+["']?([^\s"']+)["']?\s+(?:should |must )?exist/i)
+    || assertion.criterion.match(/(?:file|creates?)\s+["']?([^\s"']+)["']?\s+(?:should |must )?exist/i)
   if (fileMatch) {
     const filePath = fileMatch[1]
     return {
       type: 'file_exists',
       target: filePath,
-      script: `const fs = require('fs'); const path = require('path'); const fp = path.resolve(process.env.EVAL_WORKSPACE || '.', ${JSON.stringify(filePath)}); console.log(JSON.stringify({ passed: fs.existsSync(fp), evidence: fs.existsSync(fp) ? 'File exists: ${filePath}' : 'File not found: ${filePath}' }))`,
+      script: `const fs = require('fs'); const path = require('path'); const ws = process.env.EVAL_WORKSPACE || '.'; const fp = path.resolve(ws, ${JSON.stringify(filePath)}); if (!fp.startsWith(path.resolve(ws) + path.sep) && fp !== path.resolve(ws)) { console.log(JSON.stringify({ passed: false, evidence: 'Path traversal detected' })) } else { console.log(JSON.stringify({ passed: fs.existsSync(fp), evidence: fs.existsSync(fp) ? 'File exists: ${filePath}' : 'File not found: ${filePath}' })) }`,
     }
   }
 
