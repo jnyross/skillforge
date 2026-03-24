@@ -133,6 +133,94 @@ export async function gradeAllSemanticAssertions(
   return { results, allClaims, combinedFeedback }
 }
 
+// ── Programmatic Assertion Detection ──
+
+/**
+ * Detect if a semantic assertion can be satisfied by a deterministic programmatic check
+ * instead of an LLM call. Returns null if no programmatic equivalent is found.
+ *
+ * Detectable patterns:
+ * - JSON validity: "output should be valid JSON", "returns valid JSON"
+ * - String contains: "output should contain X", "mentions X"
+ * - Regex match: "output matches pattern X"
+ * - File existence: "file X should exist", "creates file X"
+ */
+export function detectProgrammaticAssertion(
+  assertion: SemanticAssertion,
+): { type: 'json_valid' | 'contains' | 'regex' | 'file_exists'; target?: string; expected?: string; script?: string } | null {
+  const descLower = assertion.description.toLowerCase()
+  const criterionLower = assertion.criterion.toLowerCase()
+
+  // JSON validity detection
+  if (
+    /\bvalid json\b/i.test(descLower) || /\bvalid json\b/i.test(criterionLower) ||
+    /\breturns?\s+json\b/i.test(descLower) || /\bparseable?\s+json\b/i.test(descLower)
+  ) {
+    return {
+      type: 'json_valid',
+      script: `try { JSON.parse(process.env.EVAL_RESULT); console.log(JSON.stringify({ passed: true, evidence: "Output is valid JSON" })) } catch(e) { console.log(JSON.stringify({ passed: false, evidence: "Output is not valid JSON: " + e.message })) }`,
+    }
+  }
+
+  // String contains detection — "should contain X", "must include X", "mentions X"
+  // Only use programmatic check when the assertion is simple enough that the literal
+  // match captures the full intent. If the criterion has significant additional context
+  // beyond the matched string, fall back to semantic grading to avoid false passes.
+  const containsMatch = assertion.description.match(/(?:should |must |needs to )?(?:contain|include|mention|have)\s+["']([^"']+)["']/i)
+    || assertion.criterion.match(/(?:should |must |needs to )?(?:contain|include|mention|have)\s+["']([^"']+)["']/i)
+  if (containsMatch) {
+    const needle = containsMatch[1]
+    // Complexity guard: if the criterion is much longer than the matched portion,
+    // the assertion has nuances that a simple string.includes() would miss
+    const matchedLength = containsMatch[0].length
+    const criterionLength = assertion.criterion.length
+    const descriptionLength = assertion.description.length
+    const isSimple = criterionLength <= matchedLength * 2 && descriptionLength <= matchedLength * 2
+    if (isSimple) {
+      return {
+        type: 'contains',
+        expected: needle,
+        script: `const r = process.env.EVAL_RESULT || ''; const n = ${JSON.stringify(needle)}; const found = r.toLowerCase().includes(n.toLowerCase()); console.log(JSON.stringify({ passed: found, evidence: found ? 'Output contains "' + n + '"' : 'Output does not contain "' + n + '"' }))`,
+      }
+    }
+  }
+
+  // Regex match detection — "matches pattern /X/", "matches regex X"
+  // Use original strings to preserve case in regex patterns
+  const regexMatch = assertion.description.match(/match(?:es)?\s+(?:pattern|regex)\s+\/([^/]+)\//i)
+    || assertion.criterion.match(/match(?:es)?\s+(?:pattern|regex)\s+\/([^/]+)\//i)
+  if (regexMatch) {
+    const pattern = regexMatch[1]
+    return {
+      type: 'regex',
+      expected: pattern,
+      script: `const r = process.env.EVAL_RESULT || ''; try { const re = new RegExp(${JSON.stringify(pattern)}); console.log(JSON.stringify({ passed: re.test(r), evidence: re.test(r) ? 'Output matches pattern' : 'Output does not match pattern' })) } catch(e) { console.log(JSON.stringify({ passed: false, evidence: 'Invalid regex: ' + e.message })) }`,
+    }
+  }
+
+  // File existence detection — "file X should exist", "creates file X"
+  // Use original strings to preserve case in file paths (important on case-sensitive filesystems)
+  // Only match when the assertion is primarily about file existence, not a broader criterion
+  const fileMatch = assertion.description.match(/(?:file|creates?)\s+["']?([^\s"']+)["']?\s+(?:should |must )?exist/i)
+    || assertion.criterion.match(/(?:file|creates?)\s+["']?([^\s"']+)["']?\s+(?:should |must )?exist/i)
+  if (fileMatch) {
+    const filePath = fileMatch[1]
+    // Complexity guard: only use programmatic check if the assertion is simple
+    const matchedLength = fileMatch[0].length
+    const criterionLength = assertion.criterion.length
+    const isSimple = criterionLength <= matchedLength * 2
+    if (isSimple) {
+      return {
+        type: 'file_exists',
+        target: filePath,
+        script: `const fs = require('fs'); const path = require('path'); const ws = process.env.EVAL_WORKSPACE || '.'; const fp = path.resolve(ws, ${JSON.stringify(filePath)}); if (!fp.startsWith(path.resolve(ws) + path.sep) && fp !== path.resolve(ws)) { console.log(JSON.stringify({ passed: false, evidence: 'Path traversal detected' })) } else { const exists = fs.existsSync(fp); console.log(JSON.stringify({ passed: exists, evidence: exists ? 'File exists: ' + fp : 'File not found: ' + fp })) }`,
+      }
+    }
+  }
+
+  return null
+}
+
 // ── Prompt Builders ──
 
 function buildGraderSystemPrompt(): string {

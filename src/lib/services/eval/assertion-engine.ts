@@ -31,6 +31,7 @@ export type AssertionType =
   | 'custom_script'
   | 'judge'
   | 'semantic'
+  | 'programmatic'
 
 export interface AssertionDefinition {
   type: AssertionType
@@ -41,6 +42,7 @@ export interface AssertionDefinition {
     fuzzyThreshold?: number // 0-1, for fuzzy matching
     schema?: Record<string, unknown> // JSON schema
     scriptPath?: string // path to custom validator script
+    script?: string // inline script for programmatic assertions
     field?: string // JSON field path for nested checks
     judgeId?: string // judge ID for 'judge' assertion type
     expectedOutcome?: string // expected outcome for judge context
@@ -110,6 +112,8 @@ export async function runAssertion(
         return await assertJudge(assertion, context, start)
       case 'semantic':
         return await assertSemantic(assertion, context, start)
+      case 'programmatic':
+        return await assertProgrammatic(assertion, context, start)
       default:
         return {
           type: assertion.type,
@@ -755,6 +759,70 @@ async function assertSemantic(
       passed: false,
       expected: criterion,
       evidence: `Semantic grading error: ${err instanceof Error ? err.message : String(err)}`,
+      durationMs: Date.now() - start,
+    }
+  }
+}
+
+/**
+ * Execute a programmatic assertion — runs a deterministic check (JSON validity,
+ * regex match, string contains, file existence) without needing an LLM call.
+ */
+async function assertProgrammatic(
+  assertion: AssertionDefinition,
+  context: { workspacePath: string; result: string; stdout: string; stderr: string },
+  start: number
+): Promise<AssertionResult> {
+  const script = assertion.options?.script ?? ''
+  if (!script) {
+    return {
+      type: 'programmatic',
+      passed: false,
+      evidence: 'No script provided for programmatic assertion',
+      durationMs: Date.now() - start,
+    }
+  }
+
+  try {
+    const { execFile } = await import('child_process')
+    const { promisify } = await import('util')
+    const execFileAsync = promisify(execFile)
+
+    // Execute the script as a Node.js inline script
+    const { stdout: scriptOutput } = await execFileAsync(
+      'node',
+      ['-e', script],
+      {
+        cwd: context.workspacePath,
+        timeout: 10000,
+        env: {
+          ...process.env,
+          EVAL_RESULT: context.result,
+          EVAL_STDOUT: context.stdout,
+          EVAL_STDERR: context.stderr,
+          EVAL_WORKSPACE: context.workspacePath,
+        },
+      }
+    )
+
+    // Script should output JSON: { passed: boolean, evidence: string }
+    const result = JSON.parse(scriptOutput.trim()) as {
+      passed: boolean
+      evidence?: string
+    }
+
+    return {
+      type: 'programmatic',
+      passed: result.passed,
+      expected: assertion.expected != null ? String(assertion.expected) : undefined,
+      evidence: result.evidence ?? (result.passed ? 'Programmatic check passed' : 'Programmatic check failed'),
+      durationMs: Date.now() - start,
+    }
+  } catch (err) {
+    return {
+      type: 'programmatic',
+      passed: false,
+      evidence: `Programmatic assertion error: ${err instanceof Error ? err.message : String(err)}`,
       durationMs: Date.now() - start,
     }
   }

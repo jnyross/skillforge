@@ -141,7 +141,7 @@ async function detectSkillTriggered(
 
   try {
     const client = new Anthropic()
-    const model = process.env.TRIGGER_DETECTION_MODEL || 'claude-haiku-3'
+    const model = process.env.TRIGGER_DETECTION_MODEL || 'claude-3-5-haiku-20241022'
 
     const response = await client.messages.create({
       model,
@@ -173,8 +173,9 @@ Example: "NO — output is a generic response unrelated to the skill's domain."`
 
     const text = response.content[0].type === 'text' ? response.content[0].text : ''
     return text.trim().toUpperCase().startsWith('YES')
-  } catch {
+  } catch (err) {
     // Fallback: if LLM call fails, use simple length heuristic
+    console.warn('[trigger-evaluator] LLM detection failed, falling back to length heuristic:', err instanceof Error ? err.message : String(err))
     return output.length > 200
   }
 }

@@ -228,6 +228,98 @@ export function computeBaselineComparison(
   }
 }
 
+// --- Suite-level analysis ---
+
+export interface SuiteAnalysis {
+  passRateStats: { mean: number; stddev: number; min: number; max: number }
+  nonDiscriminating: Array<{
+    assertionDesc: string
+    reason: 'always_pass' | 'always_fail'
+    caseCount: number
+  }>
+  highVariance: Array<{
+    assertionDesc: string
+    passRate: number
+  }>
+  durationStats: { mean: number; stddev: number; p95: number }
+}
+
+/**
+ * Compute suite-level analysis: non-discriminating assertions, high-variance alerts, duration stats.
+ */
+export function computeSuiteAnalysis(
+  caseRuns: Array<{
+    passed: boolean
+    durationMs: number
+    assertions: Array<{ type: string; description: string; passed: boolean }>
+  }>,
+): SuiteAnalysis {
+  if (caseRuns.length === 0) {
+    return {
+      passRateStats: { mean: 0, stddev: 0, min: 0, max: 0 },
+      nonDiscriminating: [],
+      highVariance: [],
+      durationStats: { mean: 0, stddev: 0, p95: 0 },
+    }
+  }
+
+  // Pass rate per case
+  const passRates = caseRuns.map(cr => cr.passed ? 1 : 0)
+  const passRateMean = mean(passRates)
+  const passRateStddev = stddev(passRates)
+
+  // Duration stats
+  const durations = caseRuns.map(cr => cr.durationMs).filter(d => d > 0)
+  const sortedDurations = [...durations].sort((a, b) => a - b)
+  const p95Index = Math.floor(sortedDurations.length * 0.95)
+  const p95 = sortedDurations[p95Index] ?? 0
+
+  // Assertion-level analysis: track pass/fail per assertion description
+  const assertionStats = new Map<string, { passes: number; fails: number; total: number }>()
+  for (const cr of caseRuns) {
+    for (const a of cr.assertions) {
+      const key = a.description || `${a.type}`
+      const stats = assertionStats.get(key) ?? { passes: 0, fails: 0, total: 0 }
+      stats.total++
+      if (a.passed) stats.passes++
+      else stats.fails++
+      assertionStats.set(key, stats)
+    }
+  }
+
+  const nonDiscriminating: SuiteAnalysis['nonDiscriminating'] = []
+  const highVariance: SuiteAnalysis['highVariance'] = []
+
+  for (const [desc, stats] of Array.from(assertionStats.entries())) {
+    if (stats.total < 2) continue // Need at least 2 data points
+
+    const rate = stats.passes / stats.total
+    if (rate === 1.0) {
+      nonDiscriminating.push({ assertionDesc: desc, reason: 'always_pass', caseCount: stats.total })
+    } else if (rate === 0.0) {
+      nonDiscriminating.push({ assertionDesc: desc, reason: 'always_fail', caseCount: stats.total })
+    } else if (rate >= 0.3 && rate <= 0.7) {
+      highVariance.push({ assertionDesc: desc, passRate: rate })
+    }
+  }
+
+  return {
+    passRateStats: {
+      mean: passRateMean,
+      stddev: passRateStddev,
+      min: Math.min(...passRates),
+      max: Math.max(...passRates),
+    },
+    nonDiscriminating: nonDiscriminating.sort((a, b) => b.caseCount - a.caseCount),
+    highVariance: highVariance.sort((a, b) => Math.abs(0.5 - a.passRate) - Math.abs(0.5 - b.passRate)),
+    durationStats: {
+      mean: mean(durations),
+      stddev: stddev(durations),
+      p95,
+    },
+  }
+}
+
 // --- Utility functions ---
 
 function computeFailureClusters(

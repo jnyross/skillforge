@@ -6,7 +6,7 @@ import Link from 'next/link'
 import {
   ChevronLeft, Play, Loader2, CheckCircle, XCircle,
   TrendingUp, ArrowRight, Lightbulb, Check, X,
-  BarChart3, GitBranch,
+  BarChart3, GitBranch, FileText,
 } from 'lucide-react'
 
 // --- Types ---
@@ -89,6 +89,9 @@ export default function ImprovePage() {
   const [selectedIteration, setSelectedIteration] = useState<Iteration | null>(null)
   const [acceptedIndices, setAcceptedIndices] = useState<Set<number>>(new Set())
   const [pollingId, setPollingId] = useState<ReturnType<typeof setInterval> | null>(null)
+  const [diffData, setDiffData] = useState<{ from: { commitMessage: string }; to: { commitMessage: string }; diff: string } | null>(null)
+  const [diffLoading, setDiffLoading] = useState(false)
+  const [showDiff, setShowDiff] = useState(false)
 
   // Load versions and suites
   const loadData = useCallback(async () => {
@@ -265,6 +268,25 @@ export default function ImprovePage() {
 
   function deselectAllSuggestions() {
     setAcceptedIndices(new Set())
+  }
+
+  async function handleViewDiff() {
+    if (!selectedIteration?.resultVersionId || !selectedIteration?.sourceVersionId) return
+    setDiffLoading(true)
+    try {
+      const res = await fetch(
+        `/api/skill-repos/${repoId}/diff?from=${selectedIteration.sourceVersionId}&to=${selectedIteration.resultVersionId}`
+      )
+      if (res.ok) {
+        const data = await res.json()
+        setDiffData(data)
+        setShowDiff(true)
+      }
+    } catch {
+      // ignore
+    } finally {
+      setDiffLoading(false)
+    }
   }
 
   const priorityColor = (p: string) => {
@@ -727,12 +749,62 @@ export default function ImprovePage() {
                   <p className="text-sm text-green-400">
                     Suggestions applied — new version created.
                   </p>
-                  <Link
-                    href={`/skill-repos/${repoId}`}
-                    className="text-sm text-green-400 underline ml-auto"
-                  >
-                    View version
-                  </Link>
+                  <div className="flex items-center gap-2 ml-auto">
+                    <button
+                      onClick={handleViewDiff}
+                      disabled={diffLoading}
+                      className="flex items-center gap-1 px-3 py-1.5 border border-green-500/30 rounded-md text-sm text-green-400 hover:bg-green-500/10 disabled:opacity-50"
+                    >
+                      {diffLoading ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <FileText className="h-3.5 w-3.5" />
+                      )}
+                      View Changes
+                    </button>
+                    <Link
+                      href={`/skill-repos/${repoId}`}
+                      className="text-sm text-green-400 underline"
+                    >
+                      View version
+                    </Link>
+                  </div>
+                </div>
+              )}
+
+              {/* Inline diff viewer */}
+              {showDiff && diffData && (
+                <div className="border-t border-border">
+                  <div className="px-4 py-2 bg-muted/30 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      <span className="text-sm font-semibold">Changes</span>
+                      <span className="text-xs text-muted-foreground">
+                        {diffData.from.commitMessage} → {diffData.to.commitMessage}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setShowDiff(false)}
+                      className="text-xs px-2 py-1 border border-border rounded hover:bg-accent"
+                    >
+                      Close
+                    </button>
+                  </div>
+                  <div className="p-4 overflow-auto max-h-96">
+                    <pre className="text-xs font-mono leading-relaxed">
+                      {diffData.diff.split('\n').map((line, i) => {
+                        let lineClass = 'text-muted-foreground'
+                        if (line.startsWith('+') && !line.startsWith('+++')) lineClass = 'text-green-400 bg-green-500/5'
+                        else if (line.startsWith('-') && !line.startsWith('---')) lineClass = 'text-red-400 bg-red-500/5'
+                        else if (line.startsWith('@@')) lineClass = 'text-blue-400'
+                        return (
+                          <div key={i} className={`px-2 ${lineClass}`}>
+                            {line}
+                          </div>
+                        )
+                      })}
+                    </pre>
+                  </div>
                 </div>
               )}
             </div>
