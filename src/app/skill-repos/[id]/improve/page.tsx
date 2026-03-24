@@ -375,6 +375,8 @@ export default function ImprovePage() {
                 setSelectedVersionId(e.target.value)
                 setSelectedIteration(null)
                 setIterations([])
+                setShowDiff(false)
+                setDiffData(null)
               }}
               className="w-full px-3 py-2 rounded-md border border-border bg-background text-sm"
             >
