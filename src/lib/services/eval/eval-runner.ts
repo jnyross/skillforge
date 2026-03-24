@@ -16,7 +16,7 @@ import { createWorkspace, captureArtifacts } from '../workspace'
 import { createExecutor } from '../executor'
 import { runAssertions, type AssertionDefinition } from './assertion-engine'
 import { detectTrigger, computeTriggerMetrics, type TriggerCase, type TriggerRunResult } from './trigger-engine'
-import { computeBenchmarkSummary, computeBaselineComparison, type CaseResult } from './benchmark-math'
+import { computeBenchmarkSummary, computeBaselineComparison, computeSuiteAnalysis, type CaseResult } from './benchmark-math'
 import { logAuditEvent } from '../audit-log'
 import type { ExecutorConfig } from '../executor/types'
 
@@ -216,6 +216,26 @@ export async function handleEvalRunJob(
         const comparison = computeBaselineComparison(caseResults, baselineResults)
         metricsJson = { ...metricsJson, baseline: comparison }
       }
+    }
+
+    // Compute suite analysis from case runs
+    const caseRunsForAnalysis = await prisma.evalCaseRun.findMany({
+      where: { evalRunId },
+      include: { assertions: true },
+    })
+    if (caseRunsForAnalysis.length > 0) {
+      const suiteAnalysis = computeSuiteAnalysis(
+        caseRunsForAnalysis.map(cr => ({
+          passed: cr.status === 'passed',
+          durationMs: cr.durationMs ?? 0,
+          assertions: cr.assertions.map(a => ({
+            type: a.type,
+            description: a.name,
+            passed: a.passed,
+          })),
+        }))
+      )
+      metricsJson = { ...metricsJson, suiteAnalysis }
     }
 
     // Store benchmark snapshot

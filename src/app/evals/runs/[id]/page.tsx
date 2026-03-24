@@ -689,11 +689,16 @@ export default function EvalRunDetailPage() {
                             value={currentFeedback.comment}
                             onChange={e => setFeedbackState(prev => ({ ...prev, [cr.id]: { ...currentFeedback, comment: e.target.value } }))}
                             onBlur={() => {
-                              fetch(`/api/eval-runs/${runId}/feedback`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ caseRunId: cr.id, rating: currentFeedback.rating, comment: currentFeedback.comment }),
-                              })
+                              // Use a small delay to let any concurrent onClick handler fire first
+                              // so we send the most up-to-date state
+                              setTimeout(() => {
+                                const latest = feedbackState[cr.id] ?? { rating: humanFeedback.rating ?? null, comment: humanFeedback.comment ?? '' }
+                                fetch(`/api/eval-runs/${runId}/feedback`, {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ caseRunId: cr.id, rating: latest.rating, comment: latest.comment }),
+                                })
+                              }, 100)
                             }}
                             className="flex-1 bg-muted/30 border border-border rounded px-2 py-1 text-sm"
                           />
