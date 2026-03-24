@@ -248,8 +248,8 @@ export async function runIteration(input: IterationInput): Promise<IterationResu
         comparisonResult: {
           winner: firstComparison.winner as 'skill' | 'baseline' | 'TIE',
           reasoning: `Skill win rate: ${((skillWinRate ?? 0) * 100).toFixed(0)}%, avg delta: ${(avgDelta ?? 0).toFixed(2)}`,
-          skillScore: Math.max(1, Math.min(10, (avgDelta ?? 0) > 0 ? 7 + (avgDelta ?? 0) : 5)),
-          baselineScore: Math.max(1, Math.min(10, (avgDelta ?? 0) > 0 ? 5 : 7 - (avgDelta ?? 0))),
+          skillScore: Math.max(1, Math.min(10, 5 + (avgDelta ?? 0) / 2)),
+          baselineScore: Math.max(1, Math.min(10, 5 - (avgDelta ?? 0) / 2)),
           delta: avgDelta ?? 0,
         },
         skillContent,
