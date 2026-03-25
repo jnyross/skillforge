@@ -26,11 +26,6 @@ FROM node:22-slim AS production
 
 RUN apt-get update && apt-get install -y git curl && rm -rf /var/lib/apt/lists/*
 
-# Install Claude Code CLI globally (required for claude-cli executor)
-RUN npm install -g @anthropic-ai/claude-code && \
-    claude --version && \
-    ln -sf $(which claude) /usr/bin/claude
-
 WORKDIR /app
 
 # Copy built app and dependencies
@@ -52,8 +47,8 @@ RUN git config --global user.email "skillforge@localhost" && \
     git config --global user.name "SkillForge" && \
     git config --global init.defaultBranch main
 
-# Ensure npm global bin is on PATH (belt-and-suspenders for Render)
-ENV PATH="/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin"
+# Ensure node_modules/.bin is on PATH so claude CLI is discoverable
+ENV PATH="/app/node_modules/.bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin"
 ENV NODE_ENV=production
 ENV DATABASE_URL=file:/data/skillforge.db
 ENV SKILL_REPOS_PATH=/data/skill-repos
@@ -61,4 +56,4 @@ ENV PORT=3000
 
 # Run migrations and start
 EXPOSE 3000
-CMD echo "Claude CLI: $(which claude 2>&1) $(claude --version 2>&1)" && npx prisma migrate deploy && npm start
+CMD echo "Claude CLI: $(which claude 2>&1)" && npx prisma migrate deploy && npm start
