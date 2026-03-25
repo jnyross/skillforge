@@ -1,8 +1,27 @@
 import { execFile } from 'child_process'
+import { existsSync } from 'fs'
 import { promisify } from 'util'
 import type { Executor, ExecutorInput, ExecutorOutput } from './types'
 
 const execFileAsync = promisify(execFile)
+
+/**
+ * Known paths where the Claude CLI binary may be installed.
+ * Checked in order; the first one that exists on disk wins.
+ * Falls back to bare 'claude' (PATH lookup) if none match.
+ */
+const CLAUDE_BIN_CANDIDATES = [
+  '/usr/local/bin/claude',
+  '/usr/bin/claude',
+  '/app/node_modules/.bin/claude',
+]
+
+function resolveClaudeBinary(): string {
+  for (const candidate of CLAUDE_BIN_CANDIDATES) {
+    if (existsSync(candidate)) return candidate
+  }
+  return 'claude'
+}
 
 interface ClaudeCliResult {
   type: string
@@ -42,7 +61,8 @@ export class ClaudeCliExecutor implements Executor {
     const timeoutMs = input.config?.timeoutMs ?? 300000 // 5 min default
 
     try {
-      const { stdout } = await execFileAsync('claude', args, {
+      const bin = resolveClaudeBinary()
+      const { stdout } = await execFileAsync(bin, args, {
         cwd: input.workspacePath,
         timeout: timeoutMs,
         maxBuffer: 50 * 1024 * 1024, // 50MB
@@ -98,7 +118,8 @@ export class ClaudeCliExecutor implements Executor {
 
   async healthCheck(): Promise<{ ok: boolean; version?: string; error?: string }> {
     try {
-      const { stdout } = await execFileAsync('claude', ['--version'], {
+      const bin = resolveClaudeBinary()
+      const { stdout } = await execFileAsync(bin, ['--version'], {
         timeout: 10000,
       })
       return { ok: true, version: stdout.trim() }
