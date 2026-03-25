@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { NavSidebar } from '@/components/nav-sidebar'
 import { Providers } from '@/components/providers'
+import { AgentationToolbar } from '@/components/agentation-toolbar'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -27,6 +28,7 @@ export default function RootLayout({
             </main>
           </div>
         </Providers>
+        <AgentationToolbar />
       </body>
     </html>
   )
