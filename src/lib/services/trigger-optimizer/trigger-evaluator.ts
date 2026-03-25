@@ -129,7 +129,7 @@ async function runSingleQuery(
 /**
  * Detect whether a skill was triggered from the CLI output using LLM analysis.
  * Replaces heuristic keyword matching with an LLM call for accurate detection.
- * Uses claude-haiku for speed and cost efficiency.
+ * Uses claude-opus-4-6 by default, overridable via TRIGGER_DETECTION_MODEL env var.
  */
 async function detectSkillTriggered(
   output: string,
