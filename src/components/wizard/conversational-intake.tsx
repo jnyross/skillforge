@@ -1,14 +1,14 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Loader2, User, Bot, ChevronDown } from 'lucide-react'
+import { Send, Loader2, User, Bot, ChevronDown, Gauge, Brain, GraduationCap, Sparkles } from 'lucide-react'
 import { AnswerCard } from './answer-card'
 import type {
   InterviewContext,
   ExtractedAnswer,
-  InterviewState,
+  IntentConfidenceScore,
 } from '@/lib/services/wizard/interview-service'
-import { INTERVIEW_QUESTIONS, getQuestionNumber, getTotalQuestions } from '@/lib/services/wizard/interview-service'
+import { INTERVIEW_QUESTIONS, getQuestionNumber, getTotalQuestions, computeIntentConfidence } from '@/lib/services/wizard/interview-service'
 
 interface ConversationalIntakeProps {
   mode: string
@@ -121,7 +121,10 @@ export function ConversationalIntake({ mode, onComplete, initialContext }: Conve
     const newAnswers = context.extractedAnswers.map(a =>
       a.questionKey === updated.questionKey ? updated : a
     )
-    setContext({ ...context, extractedAnswers: newAnswers })
+    const updatedContext = { ...context, extractedAnswers: newAnswers }
+    // Recompute intent confidence when answers are edited
+    updatedContext.intentConfidence = computeIntentConfidence(updatedContext)
+    setContext(updatedContext)
   }
 
   function handleGenerate() {
@@ -267,6 +270,11 @@ export function ConversationalIntake({ mode, onComplete, initialContext }: Conve
         )}
       </div>
 
+      {/* Intent Confidence Score — shown at confirm stage */}
+      {isConfirming && context?.intentConfidence && (
+        <IntentConfidenceDisplay confidence={context.intentConfidence} />
+      )}
+
       {/* Answer cards — shown when we have extracted answers */}
       {context && context.extractedAnswers.length > 0 && (
         <div className="space-y-3">
@@ -287,6 +295,45 @@ export function ConversationalIntake({ mode, onComplete, initialContext }: Conve
               />
             )
           })}
+        </div>
+      )}
+
+      {/* Expertise Detection Badge — shown once locked */}
+      {context?.expertiseLocked && context.techLevel && (
+        <div className="flex items-center gap-3 px-4 py-3 border border-border rounded-lg bg-card">
+          <div className={`p-2 rounded-full ${
+            context.techLevel.level === 'expert'
+              ? 'bg-purple-500/10'
+              : context.techLevel.level === 'intermediate'
+                ? 'bg-blue-500/10'
+                : 'bg-green-500/10'
+          }`}>
+            {context.techLevel.level === 'expert'
+              ? <GraduationCap className={`h-4 w-4 text-purple-400`} />
+              : context.techLevel.level === 'intermediate'
+                ? <Brain className={`h-4 w-4 text-blue-400`} />
+                : <Sparkles className={`h-4 w-4 text-green-400`} />
+            }
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-medium">
+              {context.techLevel.level === 'expert'
+                ? 'Expert Mode'
+                : context.techLevel.level === 'intermediate'
+                  ? 'Intermediate Mode'
+                  : 'Guided Mode'}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {context.techLevel.level === 'expert'
+                ? 'Using technical terminology and concise questions.'
+                : context.techLevel.level === 'intermediate'
+                  ? 'Balanced depth with some technical terms.'
+                  : 'Friendly guidance with plain-language explanations.'}
+              {context.techLevel.signals.length > 0 && (
+                <span className="ml-1">Detected from: {context.techLevel.signals.slice(0, 3).join(', ')}</span>
+              )}
+            </p>
+          </div>
         </div>
       )}
 
@@ -350,6 +397,66 @@ export function ConversationalIntake({ mode, onComplete, initialContext }: Conve
           </button>
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Intent Confidence Display ──────────────────────────────────────────────
+
+function IntentConfidenceDisplay({ confidence }: { confidence: IntentConfidenceScore }) {
+  const overallColor = confidence.overall >= 80
+    ? 'text-green-400'
+    : confidence.overall >= 60
+      ? 'text-amber-400'
+      : 'text-red-400'
+
+  const overallBg = confidence.overall >= 80
+    ? 'bg-green-500/10 border-green-500/20'
+    : confidence.overall >= 60
+      ? 'bg-amber-500/10 border-amber-500/20'
+      : 'bg-red-500/10 border-red-500/20'
+
+  const dimensionLabels: Record<string, string> = {
+    clarity: 'Clarity',
+    completeness: 'Completeness',
+    specificity: 'Specificity',
+    consistency: 'Consistency',
+  }
+
+  return (
+    <div className={`border rounded-lg p-4 space-y-3 ${overallBg}`}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Gauge className={`h-5 w-5 ${overallColor}`} />
+          <h3 className="text-sm font-medium">Intent Confidence</h3>
+        </div>
+        <span className={`text-2xl font-bold ${overallColor}`}>
+          {confidence.overall}%
+        </span>
+      </div>
+
+      {/* Dimension bars */}
+      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+        {(Object.entries(confidence.dimensions) as [string, number][]).map(([key, value]) => (
+          <div key={key}>
+            <div className="flex items-center justify-between mb-0.5">
+              <span className="text-xs text-muted-foreground">{dimensionLabels[key] || key}</span>
+              <span className="text-xs font-medium">{value}%</span>
+            </div>
+            <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  value >= 80 ? 'bg-green-400' : value >= 60 ? 'bg-amber-400' : 'bg-red-400'
+                }`}
+                style={{ width: `${value}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Summary */}
+      <p className="text-xs text-muted-foreground">{confidence.summary}</p>
     </div>
   )
 }

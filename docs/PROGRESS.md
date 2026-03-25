@@ -225,6 +225,10 @@ The PRD defines **5 phases** and **13 implementation slices** (Slice 0-12). The 
 - [x] API: `POST /api/wizard/draft` (create)
 - [x] API: `POST /api/wizard/draft/:id/generate` (generate skill from intent + artifacts)
 - [x] API: `POST /api/wizard/draft/:id/save` (save to repo + create eval suites)
+- [x] Expertise detection — Detects beginner/intermediate/expert from first 2 user messages, then locks level
+- [x] Adaptive question depth — Expert/intermediate/beginner question prompts with different terminology and guidance
+- [x] Intent confidence score — Four-dimension score (clarity, completeness, specificity, consistency) shown at confirm stage with visual bars
+- [x] Expertise badge UI — Shows detected level with icon and signal details once locked
 - [ ] All tests — No E2E/Playwright tests yet
 
 ---
