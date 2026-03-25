@@ -103,7 +103,7 @@ async function runSingleQuery(
     const { stdout } = await execFileAsync(claudePath, [
       '-p', query,
       '--output-format', 'text',
-      '--model', 'claude-sonnet-4-20250514',
+      '--model', 'claude-opus-4-6',
       '--max-turns', '1',
     ], {
       cwd: workspacePath,
@@ -129,7 +129,7 @@ async function runSingleQuery(
 /**
  * Detect whether a skill was triggered from the CLI output using LLM analysis.
  * Replaces heuristic keyword matching with an LLM call for accurate detection.
- * Uses claude-haiku for speed and cost efficiency.
+ * Uses claude-opus-4-6 by default, overridable via TRIGGER_DETECTION_MODEL env var.
  */
 async function detectSkillTriggered(
   output: string,
@@ -141,7 +141,7 @@ async function detectSkillTriggered(
 
   try {
     const client = new Anthropic()
-    const model = process.env.TRIGGER_DETECTION_MODEL || 'claude-3-5-haiku-20241022'
+    const model = process.env.TRIGGER_DETECTION_MODEL || 'claude-opus-4-6'
 
     const response = await client.messages.create({
       model,

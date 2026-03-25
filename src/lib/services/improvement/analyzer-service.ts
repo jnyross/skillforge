@@ -102,7 +102,7 @@ export interface AnalyzerInput {
  */
 export async function analyzeComparison(input: AnalyzerInput): Promise<AnalysisResult> {
   const client = new Anthropic()
-  const model = process.env.ANALYZER_MODEL || 'claude-sonnet-4-20250514'
+  const model = process.env.ANALYZER_MODEL || 'claude-opus-4-6'
 
   const prompt = buildAnalyzerPrompt(input)
 

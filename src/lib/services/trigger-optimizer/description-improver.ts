@@ -9,7 +9,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { QueryResult } from './trigger-evaluator'
 
-const COMPARATOR_MODEL = process.env.BLIND_COMPARATOR_MODEL || 'claude-sonnet-4-20250514'
+const COMPARATOR_MODEL = process.env.BLIND_COMPARATOR_MODEL || 'claude-opus-4-6'
 const MAX_DESCRIPTION_LENGTH = 1024
 
 export interface PreviousAttempt {
