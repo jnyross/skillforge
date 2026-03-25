@@ -270,7 +270,7 @@ export async function extractFromContext(
 
   try {
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-opus-4-6',
       max_tokens: 1024,
       messages: [{
         role: 'user',
@@ -517,7 +517,7 @@ IMPORTANT: Respond ONLY with valid JSON. No markdown, no extra text.`
 
   try {
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-opus-4-6',
       max_tokens: 1024,
       system: systemPrompt,
       messages: conversationMessages,

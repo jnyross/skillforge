@@ -12,7 +12,7 @@ export interface TriggerQuery {
   reasoning: string
 }
 
-const COMPARATOR_MODEL = process.env.BLIND_COMPARATOR_MODEL || 'claude-sonnet-4-20250514'
+const COMPARATOR_MODEL = process.env.BLIND_COMPARATOR_MODEL || 'claude-opus-4-6'
 
 /**
  * Generate 20 realistic trigger eval queries for a skill.

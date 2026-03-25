@@ -48,7 +48,7 @@ export async function improveSkill(input: ImproveSkillInput): Promise<ImprovedSk
   }
 
   const client = new Anthropic()
-  const model = process.env.SKILL_IMPROVER_MODEL || 'claude-sonnet-4-20250514'
+  const model = process.env.SKILL_IMPROVER_MODEL || 'claude-opus-4-6'
 
   const prompt = buildImproverPrompt(input)
 

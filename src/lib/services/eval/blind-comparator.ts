@@ -86,7 +86,7 @@ export interface ComparisonResult {
  */
 export async function compareBlind(input: ComparisonInput): Promise<ComparisonResult> {
   const client = new Anthropic()
-  const model = process.env.BLIND_COMPARATOR_MODEL || 'claude-sonnet-4-20250514'
+  const model = process.env.BLIND_COMPARATOR_MODEL || 'claude-opus-4-6'
 
   const prompt = buildComparatorPrompt(input)
 

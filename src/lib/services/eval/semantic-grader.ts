@@ -71,8 +71,8 @@ export async function gradeSemanticAssertion(
   const userPrompt = buildGraderUserPrompt(assertion, output, prompt)
 
   try {
-    // Use a cheaper model for grading (sonnet) but fall back to config default
-    const graderModel = process.env.SEMANTIC_GRADER_MODEL || 'claude-sonnet-4-20250514'
+    // Use opus-4-6 for grading, overridable via SEMANTIC_GRADER_MODEL env var
+    const graderModel = process.env.SEMANTIC_GRADER_MODEL || 'claude-opus-4-6'
     const response = await client.messages.create({
       model: graderModel,
       max_tokens: 4096,

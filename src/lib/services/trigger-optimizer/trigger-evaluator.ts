@@ -103,7 +103,7 @@ async function runSingleQuery(
     const { stdout } = await execFileAsync(claudePath, [
       '-p', query,
       '--output-format', 'text',
-      '--model', 'claude-sonnet-4-20250514',
+      '--model', 'claude-opus-4-6',
       '--max-turns', '1',
     ], {
       cwd: workspacePath,
@@ -141,7 +141,7 @@ async function detectSkillTriggered(
 
   try {
     const client = new Anthropic()
-    const model = process.env.TRIGGER_DETECTION_MODEL || 'claude-3-5-haiku-20241022'
+    const model = process.env.TRIGGER_DETECTION_MODEL || 'claude-opus-4-6'
 
     const response = await client.messages.create({
       model,
