@@ -1,81 +1,51 @@
-# Testing SkillForge App
+# SkillForge Local Testing
 
-## Dev Server Setup
+## Prerequisites
+- Node.js (check with `node -v`)
+- ANTHROPIC_API_KEY environment variable set (needed for real LLM calls)
+
+## Database Setup
+- SQLite is the default database provider
+- Set `DATABASE_URL="file:./dev.db"` before running any Prisma commands
+- Generate Prisma client: `npx prisma generate`
+- Reset database: `npx prisma db push --force-reset --accept-data-loss`
+- Seed database: `npx tsx prisma/seed.ts` (do NOT use `npx prisma db seed` — it requires ts-node which may not be installed; tsx works as a drop-in replacement)
+- The seed script creates a default workspace, user, and executor config with `claude-opus-4-6` model
+
+## Starting Dev Server
 ```bash
-npm install
-npx prisma generate
-npx prisma db push
-PORT=3001 npm run dev
+export DATABASE_URL="file:./dev.db"
+export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}"
+npm run dev
 ```
-Server runs on http://localhost:3001
+Server starts on http://localhost:3000
 
-## Database
-- SQLite via Prisma at `prisma/dev.db`
-- Reset with: `rm prisma/dev.db && npx prisma db push`
+## Wizard Testing
+- Navigate to http://localhost:3000/wizard
+- The page has 4 mode cards: Extract from Task, Synthesize from Artifacts, Hybrid, From Scratch
+- **Important**: After the page loads, wait 3-5 seconds before clicking cards — React hydration needs to complete
+- Click "From Scratch" to enter the conversational interview flow
+- The interview API endpoint is `/api/wizard/interview`
+- First message triggers LLM call at `interview-service.ts` line ~273
+- Follow-up messages trigger LLM call at `interview-service.ts` line ~520
+- Can also test via curl:
+  ```bash
+  curl -s -X POST http://localhost:3000/api/wizard/interview \
+    -H 'Content-Type: application/json' \
+    -d '{"action": "start", "mode": "scratch"}'
+  ```
 
-## Creating Test Data via API
-
-### Skill Repo
-```bash
-curl -X POST http://localhost:3001/api/skill-repos \
-  -H 'Content-Type: application/json' \
-  -d '{"slug":"test-skill","displayName":"Test Skill","description":"For testing"}'
-```
-
-### Skill Version (requires `files` array, not `content`)
-```bash
-curl -X POST http://localhost:3001/api/skill-repos/{repoId}/versions \
-  -H 'Content-Type: application/json' \
-  -d '{"files":[{"path":"SKILL.md","content":"# Skill content"}],"message":"initial"}'
-```
-
-### Eval Suite
-```bash
-curl -X POST http://localhost:3001/api/eval-suites \
-  -H 'Content-Type: application/json' \
-  -d '{"skillRepoId":"...","name":"Test Suite","type":"output"}'
-```
-
-### Eval Cases (split must be `train`, `validation`, or `holdout` — NOT `test`)
-```bash
-curl -X POST http://localhost:3001/api/eval-suites/{suiteId}/cases \
-  -H 'Content-Type: application/json' \
-  -d '{"key":"case-1","name":"Test case","prompt":"...","split":"train"}'
-```
-
-### Eval Run (use `mock` executor for quick testing)
-```bash
-curl -X POST http://localhost:3001/api/eval-runs \
-  -H 'Content-Type: application/json' \
-  -d '{"skillRepoId":"...","skillVersionId":"...","suiteId":"...","executorType":"mock"}'
-# Then start it:
-curl -X POST http://localhost:3001/api/eval-runs/{runId}/start
-```
-Mock executor completes in ~5 seconds.
-
-## Adaptive Language Testing
-- Tech level stored in localStorage key: `skillforge-tech-level`
-- Valid values: `beginner`, `intermediate`, `expert`
-- Set via DevTools console: `localStorage.setItem('skillforge-tech-level', 'beginner')`
-- Reload page after changing to see updated terms
-- Key terms to verify (must be Title Cased in metric labels):
-  - Beginner: "Success Rate", "Score Change", "Original Version", "Test Example"
-  - Expert: "Pass Rate", "Delta", "Baseline", "Eval Case"
-
-## Key Pages to Test
-- `/wizard` — Interview flow (5 questions: capability, trigger, format, testing, edge_cases)
-- `/evals/runs/{id}` — Eval run detail with Outputs tab
-- `/evals/runs/{id}/comparison` — Blind comparison with TooltipTerm (visible for beginner/intermediate, hidden for expert)
-- `/skill-repos/{id}/improve` — Improvement loop with diff viewer
-- `/skill-repos/{id}/trigger-optimizer` — Trigger optimizer with adaptive labels
+## Model Defaults
+- The default model across the entire codebase should be `claude-opus-4-6` (1M context window)
+- The default executor must always be `claude-cli` (real Claude Code CLI), never `mock`
+- Central config is at `src/lib/config.ts`
+- Individual services have their own env var overrides (e.g., `SKILL_IMPROVER_MODEL`, `ANALYZER_MODEL`, `TRIGGER_DETECTION_MODEL`)
 
 ## Lint & Build
-```bash
-npm run lint
-npm run build
-```
+- Lint: `npx next lint`
+- Build: `npx next build`
+- Both must pass before creating PRs
 
-## Known Gotchas
-- `browser_console` tool may not work if Chrome isn't properly focused — use DevTools console (F12) directly instead
-- The version API requires a `files` array (not a `content` string)
-- Eval case `split` values are `train`/`validation`/`holdout` (not `test`)
+## Docker Deployment
+- `docker-compose.yml` sets `DEFAULT_MODEL` and `DEFAULT_EXECUTOR` environment variables
+- Verify these match the expected defaults when deploying
