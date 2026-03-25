@@ -16,7 +16,7 @@ services:
       - SKILL_REPOS_PATH=/data/skill-repos
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - DEFAULT_EXECUTOR=${DEFAULT_EXECUTOR:-claude-cli}
-      - DEFAULT_MODEL=${DEFAULT_MODEL:-claude-sonnet-4-20250514}
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-claude-opus-4-6}
     volumes:
       - skillforge-data:/data
       - claude-config:/root/.claude
