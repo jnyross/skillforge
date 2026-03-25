@@ -52,6 +52,17 @@ export interface InterviewMessage {
   timestamp: string
 }
 
+export interface IntentConfidenceScore {
+  overall: number // 0-100
+  dimensions: {
+    clarity: number // How clearly the user expressed their intent
+    completeness: number // How many key aspects were covered
+    specificity: number // How specific (vs vague) the answers are
+    consistency: number // Whether answers are consistent with each other
+  }
+  summary: string // Human-readable summary of confidence
+}
+
 export interface InterviewContext {
   state: InterviewState
   messages: InterviewMessage[]
@@ -59,6 +70,10 @@ export interface InterviewContext {
   techLevel: TechLevelProfile | null
   mode: string
   followUpCount: number // Track follow-ups to avoid infinite loops
+  /** Whether expertise was locked in (after first 2 user messages) */
+  expertiseLocked: boolean
+  /** Intent confidence score — computed at confirm stage */
+  intentConfidence: IntentConfidenceScore | null
 }
 
 // ─── Question Definitions ───────────────────────────────────────────────────
@@ -328,6 +343,8 @@ export function createInitialContext(mode: string): InterviewContext {
     techLevel: null,
     mode,
     followUpCount: 0,
+    expertiseLocked: false,
+    intentConfidence: null,
   }
 }
 
@@ -368,15 +385,16 @@ export async function processInterviewMessage(
 ): Promise<{ response: string; context: InterviewContext; extractedAnswer?: ExtractedAnswer }> {
   const apiKey = process.env.ANTHROPIC_API_KEY
 
-  // Detect tech level from user's first message
+  // Detect tech level from user's first 2 messages, then lock it in
   let updatedContext = { ...context }
   const userMessages = [...context.messages.filter(m => m.role === 'user').map(m => m.content), userMessage]
 
-  if (!updatedContext.techLevel) {
+  if (!updatedContext.expertiseLocked) {
     updatedContext.techLevel = detectTechLevel(userMessages)
-  } else if (userMessages.length <= 3) {
-    // Refine tech level with more data from early messages
-    updatedContext.techLevel = detectTechLevel(userMessages)
+    // Lock expertise after 2 user messages
+    if (userMessages.length >= 2) {
+      updatedContext.expertiseLocked = true
+    }
   }
 
   // Add user message to history
@@ -385,7 +403,7 @@ export async function processInterviewMessage(
     { role: 'user' as const, content: userMessage, timestamp: new Date().toISOString() },
   ]
 
-  const terms = getAdaptiveTerms(updatedContext.techLevel.level)
+  const terms = getAdaptiveTerms(updatedContext.techLevel?.level || 'intermediate')
 
   // Handle state transitions
   if (updatedContext.state === 'greeting') {
@@ -478,7 +496,7 @@ VALID NEXT STATES based on current state:
 - q4_testing → edge_cases (always)
 - edge_cases → confirm (always)
 
-CURRENT QUESTION: ${getQuestionPromptForState(context.state, terms)}
+CURRENT QUESTION: ${getQuestionPromptForState(context.state, terms, techLevel)}
 
 Previously extracted answers:
 ${context.extractedAnswers.map(a => `- ${a.questionKey}: ${a.answer}`).join('\n') || '(none yet)'}
@@ -558,7 +576,7 @@ IMPORTANT: Respond ONLY with valid JSON. No markdown, no extra text.`
         context.followUpCount++
       }
 
-      const assistantMessage = parsed.response || generateFallbackResponse(nextState, terms)
+      const assistantMessage = parsed.response || generateFallbackResponse(nextState, terms, techLevel)
 
       context.state = nextState
       context.messages.push({
@@ -606,7 +624,7 @@ function processWithoutLLM(
   const nextState = getDefaultNextState(context.state, false, context.followUpCount)
   context.state = nextState
 
-  const response = generateFallbackResponse(nextState, terms)
+  const response = generateFallbackResponse(nextState, terms, context.techLevel?.level)
   context.messages.push({
     role: 'assistant',
     content: response,
@@ -638,7 +656,65 @@ function getCurrentQuestionKey(state: InterviewState): ExtractedAnswer['question
   }
 }
 
-function getQuestionPromptForState(state: InterviewState, terms: Record<string, string>): string {
+function getQuestionPromptForState(state: InterviewState, terms: Record<string, string>, techLevel?: TechLevel): string {
+  const level = techLevel || 'intermediate'
+
+  // Adaptive question depth based on expertise
+  if (level === 'expert') {
+    return getExpertQuestionPrompt(state, terms)
+  } else if (level === 'beginner') {
+    return getBeginnerQuestionPrompt(state, terms)
+  }
+  return getIntermediateQuestionPrompt(state, terms)
+}
+
+function getExpertQuestionPrompt(state: InterviewState, terms: Record<string, string>): string {
+  switch (state) {
+    case 'q1_capability':
+      return 'Question 1: What capability should this skill provide? Ask for the core behavior, scope boundaries, and any specific APIs/tools it should leverage. Be concise — the user knows the domain.'
+    case 'q1_followup':
+      return 'Follow up on Q1: The capability description needs more precision. Ask about scope boundaries, error handling strategy, or interaction with other tools/skills.'
+    case 'q2_trigger':
+      return `Question 2: What ${terms.triggerTerm}s should activate this skill? Ask for 2-3 trigger patterns including edge cases and near-miss scenarios that should NOT trigger.`
+    case 'q2_followup':
+      return 'Follow up on Q2: Need more trigger diversity. Ask for negative examples (should-not-trigger cases) or ambiguous edge cases.'
+    case 'q3_format':
+      return `Question 3: What output format and structure? Ask about schema/template specifics, structured vs freeform, and any validation constraints on the output.`
+    case 'q3_followup':
+      return 'Follow up on Q3: The format spec needs more detail. Ask about error output format, partial success handling, or structured metadata.'
+    case 'q4_testing':
+      return `Question 4: ${terms.testTerm} strategy — ask about train/validation/holdout split preferences, assertion types (semantic vs exact), and any specific dimensions they want evaluated.`
+    case 'edge_cases':
+      return 'Question 5: Edge cases and failure modes — ask about: malformed inputs, adversarial prompts, resource constraints, concurrent execution, and explicit refusal conditions.'
+    default:
+      return ''
+  }
+}
+
+function getBeginnerQuestionPrompt(state: InterviewState, terms: Record<string, string>): string {
+  switch (state) {
+    case 'q1_capability':
+      return 'Question 1: What would you like this skill to help with? Use simple language and give an example to help the user understand. Ask them to describe the task in their own words, like explaining it to a friend.'
+    case 'q1_followup':
+      return "Follow up on Q1: The user's description is a bit general. Give a concrete example of what you think they mean and ask if that's right, or ask them to walk through a specific scenario step by step."
+    case 'q2_trigger':
+      return `Question 2: When should this skill turn on? Explain that ${terms.triggerTerm} means "what would someone type to use this skill?" Give 1-2 examples first, then ask the user to share their own examples.`
+    case 'q2_followup':
+      return 'Follow up on Q2: The user only gave one example. Help them think of more by suggesting variations — different wordings, different scenarios — and ask which ones feel right.'
+    case 'q3_format':
+      return 'Question 3: What should the result look like? Explain the options in plain terms: "Should it produce a document, some code, a list, or something else?" Give examples of each.'
+    case 'q3_followup':
+      return 'Follow up on Q3: Help narrow it down — ask "Should it be more like a paragraph of text, a step-by-step list, or structured data like a table?"'
+    case 'q4_testing':
+      return `Question 4: Want to add ${terms.testTerm} to make sure the skill works correctly? Explain in simple terms: "Testing means we check the skill with sample inputs to make sure it gives good results." Recommend saying yes and explain it helps catch problems early.`
+    case 'edge_cases':
+      return 'Question 5: Are there any tricky situations this skill should handle? Help the user think about this by asking: "What if someone gives it weird input? What if the request is unclear? Should the skill ever say no?" Give a concrete example relevant to their skill.'
+    default:
+      return ''
+  }
+}
+
+function getIntermediateQuestionPrompt(state: InterviewState, terms: Record<string, string>): string {
   switch (state) {
     case 'q1_capability':
       return 'Question 1: What should this skill enable Claude to do? Ask the user to describe what they want.'
@@ -700,7 +776,15 @@ function isValidState(state: string): boolean {
   return valid.includes(state as InterviewState)
 }
 
-function generateFallbackResponse(nextState: InterviewState, terms: Record<string, string>): string {
+function generateFallbackResponse(nextState: InterviewState, terms: Record<string, string>, techLevel?: TechLevel): string {
+  const level = techLevel || 'intermediate'
+
+  if (level === 'expert') {
+    return generateExpertFallbackResponse(nextState, terms)
+  } else if (level === 'beginner') {
+    return generateBeginnerFallbackResponse(nextState, terms)
+  }
+
   switch (nextState) {
     case 'q1_capability':
       return 'Let\'s create a skill! First, what should this skill enable Claude to do? Describe the core capability you\'re looking for.'
@@ -716,6 +800,130 @@ function generateFallbackResponse(nextState: InterviewState, terms: Record<strin
       return 'I\'ve captured all the key details. Please review the answers below — you can click any card to edit it. When everything looks good, click "Generate Skill" to proceed.'
     default:
       return 'Thanks for the details!'
+  }
+}
+
+function generateExpertFallbackResponse(nextState: InterviewState, terms: Record<string, string>): string {
+  switch (nextState) {
+    case 'q1_capability':
+      return 'What capability should this skill provide? Include scope boundaries and key behaviors.'
+    case 'q2_trigger':
+      return `${terms.triggerTerm} patterns — give me 2-3 trigger examples plus any near-miss cases that should NOT trigger.`
+    case 'q3_format':
+      return 'Output format? Specify structure (schema/template), any validation constraints, and error output format.'
+    case 'q4_testing':
+      return `${terms.testTerm} config — I\'ll generate train/validation/holdout splits with semantic assertions. Want custom assertion dimensions or specific eval criteria?`
+    case 'edge_cases':
+      return 'Edge cases: malformed inputs, adversarial prompts, resource constraints, concurrent execution, explicit refusal conditions?'
+    case 'confirm':
+      return 'Review the extracted answers below. Edit any card, then hit Generate.'
+    default:
+      return 'Noted.'
+  }
+}
+
+function generateBeginnerFallbackResponse(nextState: InterviewState, terms: Record<string, string>): string {
+  switch (nextState) {
+    case 'q1_capability':
+      return 'Let\'s build a skill together! First, describe what you\'d like this skill to help with — imagine you\'re explaining the task to a friend. What problem does it solve?'
+    case 'q2_trigger':
+      return `Nice! Now, what would someone type to use this skill? Think of it like a command or request — for example, "Help me write a haiku" or "Review this code". Give me 2-3 examples of what someone might say.`
+    case 'q3_format':
+      return 'What should the result look like? Should it be a paragraph of text, a step-by-step list, some code, a table, or something else? No wrong answers here!'
+    case 'q4_testing':
+      return `Great job so far! I\'d recommend we add some ${terms.testTerm} — these are sample inputs I\'ll check the skill against to make sure it works correctly. Think of it like a practice quiz. Want me to set those up for you?`
+    case 'edge_cases':
+      return 'Last one! Can you think of any tricky situations? For example: What if someone asks for something slightly different? What if the input is really short or really long? Should the skill ever say "I can\'t help with that"?'
+    case 'confirm':
+      return 'I\'ve captured everything you said! Take a look at the answer cards below — you can click any one to edit it if something doesn\'t look right. When you\'re happy with everything, click "Generate Skill" to create your skill!'
+    default:
+      return 'Thanks for sharing that!'
+  }
+}
+
+// ─── Intent Confidence Scoring ──────────────────────────────────────────────
+
+/**
+ * Compute a confidence score for how well the wizard understood the user's intent.
+ * Runs deterministically from the extracted answers — no LLM call needed.
+ */
+export function computeIntentConfidence(context: InterviewContext): IntentConfidenceScore {
+  const answers = context.extractedAnswers
+  const coreKeys: ExtractedAnswer['questionKey'][] = ['capability', 'trigger', 'format']
+  const allKeys: ExtractedAnswer['questionKey'][] = ['capability', 'trigger', 'format', 'testing', 'edge_cases']
+
+  // 1. Completeness: what fraction of questions have answers?
+  const answeredKeys = new Set(answers.map(a => a.questionKey))
+  const coreAnswered = coreKeys.filter(k => answeredKeys.has(k)).length
+  const allAnswered = allKeys.filter(k => answeredKeys.has(k)).length
+  // Core questions (capability, trigger, format) are weighted 2x
+  const completeness = Math.round(((coreAnswered * 2 + (allAnswered - coreAnswered)) / (coreKeys.length * 2 + (allKeys.length - coreKeys.length))) * 100)
+
+  // 2. Clarity: based on confidence levels of extracted answers
+  const confidenceValues: Record<string, number> = { high: 100, medium: 60, low: 25 }
+  const clarityScores = answers.map(a => confidenceValues[a.confidence] || 50)
+  const clarity = clarityScores.length > 0
+    ? Math.round(clarityScores.reduce((a, b) => a + b, 0) / clarityScores.length)
+    : 0
+
+  // 3. Specificity: how long/detailed are the answers?
+  const specificityScores = answers.map(a => {
+    const len = a.answer.length
+    if (len > 200) return 100
+    if (len > 100) return 80
+    if (len > 50) return 60
+    if (len > 20) return 40
+    return 20
+  })
+  const specificity = specificityScores.length > 0
+    ? Math.round(specificityScores.reduce((a, b) => a + b, 0) / specificityScores.length)
+    : 0
+
+  // 4. Consistency: check that trigger answers reference the capability
+  let consistency = 70 // Base score
+  const capAnswer = answers.find(a => a.questionKey === 'capability')
+  const trigAnswer = answers.find(a => a.questionKey === 'trigger')
+  if (capAnswer && trigAnswer) {
+    // Extract key words from capability and check if triggers are related
+    const capWords = capAnswer.answer.toLowerCase().split(/\s+/).filter(w => w.length > 3)
+    const trigText = trigAnswer.answer.toLowerCase()
+    const overlap = capWords.filter(w => trigText.includes(w)).length
+    if (overlap >= 2) {
+      consistency = 95
+    } else if (overlap >= 1) {
+      consistency = 80
+    } else {
+      consistency = 55
+    }
+  }
+  // Penalize if answers marked as needing follow-up weren't resolved
+  const unresolvedFollowUps = answers.filter(a => a.needsFollowUp).length
+  consistency = Math.max(20, consistency - unresolvedFollowUps * 15)
+
+  // Overall: weighted average
+  const overall = Math.round(
+    completeness * 0.30 +
+    clarity * 0.30 +
+    specificity * 0.20 +
+    consistency * 0.20
+  )
+
+  // Summary
+  let summary: string
+  if (overall >= 80) {
+    summary = 'Strong understanding — the wizard has a clear picture of your intent and can generate a high-quality skill.'
+  } else if (overall >= 60) {
+    summary = 'Good understanding — the wizard captured the main ideas but some details could be refined. Consider editing low-confidence answers.'
+  } else if (overall >= 40) {
+    summary = 'Partial understanding — the wizard has a rough idea but may need more detail on key questions. Edit the answer cards to improve accuracy.'
+  } else {
+    summary = 'Limited understanding — several key questions are unanswered or vague. Please review and edit the answer cards before generating.'
+  }
+
+  return {
+    overall,
+    dimensions: { clarity, completeness, specificity, consistency },
+    summary,
   }
 }
 

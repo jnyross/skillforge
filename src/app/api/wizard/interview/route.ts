@@ -3,6 +3,7 @@ import {
   createInitialContext,
   processInterviewMessage,
   generateGreeting,
+  computeIntentConfidence,
   type InterviewContext,
 } from '@/lib/services/wizard/interview-service'
 
@@ -57,6 +58,11 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await processInterviewMessage(message.trim(), context)
+
+    // Compute intent confidence when reaching confirm state
+    if (result.context.state === 'confirm' || result.context.state === 'done') {
+      result.context.intentConfidence = computeIntentConfidence(result.context)
+    }
 
     return NextResponse.json({
       response: result.response,
