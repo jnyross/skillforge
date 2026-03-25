@@ -26,6 +26,9 @@ FROM node:22-slim AS production
 
 RUN apt-get update && apt-get install -y git curl && rm -rf /var/lib/apt/lists/*
 
+# Install Claude Code CLI globally (required for claude-cli executor)
+RUN npm install -g @anthropic-ai/claude-code
+
 WORKDIR /app
 
 # Copy built app and dependencies
