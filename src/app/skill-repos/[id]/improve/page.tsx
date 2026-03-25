@@ -375,6 +375,8 @@ export default function ImprovePage() {
                 setSelectedVersionId(e.target.value)
                 setSelectedIteration(null)
                 setIterations([])
+                setShowDiff(false)
+                setDiffData(null)
               }}
               className="w-full px-3 py-2 rounded-md border border-border bg-background text-sm"
             >
@@ -435,6 +437,8 @@ export default function ImprovePage() {
                   onClick={() => {
                     setSelectedIteration(iter)
                     setAcceptedIndices(new Set(iter.acceptedIndices || []))
+                    setShowDiff(false)
+                    setDiffData(null)
                   }}
                   className={`flex flex-col items-center gap-1 px-4 py-3 rounded-md border min-w-[120px] ${
                     selectedIteration?.id === iter.id
