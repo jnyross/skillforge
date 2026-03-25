@@ -18,6 +18,10 @@ RUN npx prisma generate
 # Ensure public directory exists (Next.js expects it but it may be empty)
 RUN mkdir -p public
 
+# Bake NEXT_PUBLIC_* env vars into the Next.js bundle at build time.
+# Render injects env vars at runtime only, but Next.js needs them during build.
+ENV NEXT_PUBLIC_AGENTATION_ENDPOINT=https://agentation-mcp.onrender.com
+
 # Build Next.js
 RUN npm run build
 
