@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 
 const navItems = [
+  { href: '/wizard', label: 'Wizard', icon: Wand2 },
   { href: '/', label: 'Repositories', icon: FolderGit2 },
   { href: '/evals', label: 'Evals', icon: FlaskConical },
   { href: '/eval-builder', label: 'Eval Builder', icon: MessageSquarePlus },
@@ -18,7 +19,6 @@ const navItems = [
   { href: '/optimizer', label: 'Optimizer', icon: Zap },
   { href: '/error-analysis', label: 'Error Analysis', icon: SearchSlash },
   { href: '/synthetic-data', label: 'Synthetic Data', icon: Database },
-  { href: '/wizard', label: 'Wizard', icon: Wand2 },
   { href: '/acceptance', label: 'Acceptance', icon: Shield },
   { href: '/audit-log', label: 'Audit Log', icon: ScrollText },
   { href: '/settings', label: 'Settings', icon: Settings },

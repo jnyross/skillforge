@@ -91,11 +91,6 @@ export const INTERVIEW_QUESTIONS: QuestionDef[] = [
     shortLabel: 'Capability',
   },
   {
-    key: 'trigger',
-    label: 'When should this skill trigger? What would a user say?',
-    shortLabel: 'Trigger',
-  },
-  {
     key: 'format',
     label: "What's the expected output format?",
     shortLabel: 'Output Format',
@@ -109,6 +104,11 @@ export const INTERVIEW_QUESTIONS: QuestionDef[] = [
     key: 'edge_cases',
     label: 'What edge cases or tricky scenarios should this skill handle?',
     shortLabel: 'Edge Cases',
+  },
+  {
+    key: 'trigger',
+    label: 'When should this skill trigger? What would a user say?',
+    shortLabel: 'Trigger',
   },
 ]
 
@@ -354,15 +354,15 @@ export function getQuestionNumber(state: InterviewState): number {
     case 'q1_capability':
     case 'q1_followup':
       return 1
-    case 'q2_trigger':
-    case 'q2_followup':
-      return 2
     case 'q3_format':
     case 'q3_followup':
-      return 3
+      return 2
     case 'q4_testing':
-      return 4
+      return 3
     case 'edge_cases':
+      return 4
+    case 'q2_trigger':
+    case 'q2_followup':
       return 5
     case 'confirm':
     case 'done':
@@ -426,8 +426,9 @@ export async function processInterviewMessage(
         }
 
         // Skip questions that were answered with high confidence
+        // New order: capability → format → testing → edge_cases → trigger
         if (suggestedSkips.includes('capability')) {
-          updatedContext.state = suggestedSkips.includes('trigger') ? 'q3_format' : 'q2_trigger'
+          updatedContext.state = suggestedSkips.includes('format') ? 'q4_testing' : 'q3_format'
         }
       }
     }
@@ -486,15 +487,15 @@ Respond with a JSON object:
   "nextState": "the next interview state to transition to"
 }
 
-VALID NEXT STATES based on current state:
-- q1_capability → q1_followup (if answer is vague) OR q2_trigger (if answer is good)
-- q1_followup → q2_trigger (always move on after follow-up)
-- q2_trigger → q2_followup (if only 1 example given) OR q3_format (if good)
-- q2_followup → q3_format (always move on)
+VALID NEXT STATES based on current state (trigger is asked LAST):
+- q1_capability → q1_followup (if answer is vague) OR q3_format (if answer is good)
+- q1_followup → q3_format (always move on after follow-up)
 - q3_format → q3_followup (if vague) OR q4_testing (if good)
 - q3_followup → q4_testing (always move on)
 - q4_testing → edge_cases (always)
-- edge_cases → confirm (always)
+- edge_cases → q2_trigger (always — trigger is the final question)
+- q2_trigger → q2_followup (if only 1 example given) OR confirm (if good)
+- q2_followup → confirm (always move on)
 
 CURRENT QUESTION: ${getQuestionPromptForState(context.state, terms, techLevel)}
 
@@ -674,18 +675,18 @@ function getExpertQuestionPrompt(state: InterviewState, terms: Record<string, st
       return 'Question 1: What capability should this skill provide? Ask for the core behavior, scope boundaries, and any specific APIs/tools it should leverage. Be concise — the user knows the domain.'
     case 'q1_followup':
       return 'Follow up on Q1: The capability description needs more precision. Ask about scope boundaries, error handling strategy, or interaction with other tools/skills.'
-    case 'q2_trigger':
-      return `Question 2: What ${terms.triggerTerm}s should activate this skill? Ask for 2-3 trigger patterns including edge cases and near-miss scenarios that should NOT trigger.`
-    case 'q2_followup':
-      return 'Follow up on Q2: Need more trigger diversity. Ask for negative examples (should-not-trigger cases) or ambiguous edge cases.'
     case 'q3_format':
-      return `Question 3: What output format and structure? Ask about schema/template specifics, structured vs freeform, and any validation constraints on the output.`
+      return `Question 2: What output format and structure? Ask about schema/template specifics, structured vs freeform, and any validation constraints on the output.`
     case 'q3_followup':
-      return 'Follow up on Q3: The format spec needs more detail. Ask about error output format, partial success handling, or structured metadata.'
+      return 'Follow up on Q2: The format spec needs more detail. Ask about error output format, partial success handling, or structured metadata.'
     case 'q4_testing':
-      return `Question 4: ${terms.testTerm} strategy — ask about train/validation/holdout split preferences, assertion types (semantic vs exact), and any specific dimensions they want evaluated.`
+      return `Question 3: ${terms.testTerm} strategy — ask about train/validation/holdout split preferences, assertion types (semantic vs exact), and any specific dimensions they want evaluated.`
     case 'edge_cases':
-      return 'Question 5: Edge cases and failure modes — ask about: malformed inputs, adversarial prompts, resource constraints, concurrent execution, and explicit refusal conditions.'
+      return 'Question 4: Edge cases and failure modes — ask about: malformed inputs, adversarial prompts, resource constraints, concurrent execution, and explicit refusal conditions.'
+    case 'q2_trigger':
+      return `Question 5 (final): What ${terms.triggerTerm}s should activate this skill? Ask for 2-3 trigger patterns including edge cases and near-miss scenarios that should NOT trigger.`
+    case 'q2_followup':
+      return 'Follow up on Q5: Need more trigger diversity. Ask for negative examples (should-not-trigger cases) or ambiguous edge cases.'
     default:
       return ''
   }
@@ -697,18 +698,18 @@ function getBeginnerQuestionPrompt(state: InterviewState, terms: Record<string, 
       return 'Question 1: What would you like this skill to help with? Use simple language and give an example to help the user understand. Ask them to describe the task in their own words, like explaining it to a friend.'
     case 'q1_followup':
       return "Follow up on Q1: The user's description is a bit general. Give a concrete example of what you think they mean and ask if that's right, or ask them to walk through a specific scenario step by step."
-    case 'q2_trigger':
-      return `Question 2: When should this skill turn on? Explain that ${terms.triggerTerm} means "what would someone type to use this skill?" Give 1-2 examples first, then ask the user to share their own examples.`
-    case 'q2_followup':
-      return 'Follow up on Q2: The user only gave one example. Help them think of more by suggesting variations — different wordings, different scenarios — and ask which ones feel right.'
     case 'q3_format':
-      return 'Question 3: What should the result look like? Explain the options in plain terms: "Should it produce a document, some code, a list, or something else?" Give examples of each.'
+      return 'Question 2: What should the result look like? Explain the options in plain terms: "Should it produce a document, some code, a list, or something else?" Give examples of each.'
     case 'q3_followup':
-      return 'Follow up on Q3: Help narrow it down — ask "Should it be more like a paragraph of text, a step-by-step list, or structured data like a table?"'
+      return 'Follow up on Q2: Help narrow it down — ask "Should it be more like a paragraph of text, a step-by-step list, or structured data like a table?"'
     case 'q4_testing':
-      return `Question 4: Want to add ${terms.testTerm} to make sure the skill works correctly? Explain in simple terms: "Testing means we check the skill with sample inputs to make sure it gives good results." Recommend saying yes and explain it helps catch problems early.`
+      return `Question 3: Want to add ${terms.testTerm} to make sure the skill works correctly? Explain in simple terms: "Testing means we check the skill with sample inputs to make sure it gives good results." Recommend saying yes and explain it helps catch problems early.`
     case 'edge_cases':
-      return 'Question 5: Are there any tricky situations this skill should handle? Help the user think about this by asking: "What if someone gives it weird input? What if the request is unclear? Should the skill ever say no?" Give a concrete example relevant to their skill.'
+      return 'Question 4: Are there any tricky situations this skill should handle? Help the user think about this by asking: "What if someone gives it weird input? What if the request is unclear? Should the skill ever say no?" Give a concrete example relevant to their skill.'
+    case 'q2_trigger':
+      return `Question 5 (final): When should this skill turn on? Explain that ${terms.triggerTerm} means "what would someone type to use this skill?" Give 1-2 examples first, then ask the user to share their own examples.`
+    case 'q2_followup':
+      return 'Follow up on Q5: The user only gave one example. Help them think of more by suggesting variations — different wordings, different scenarios — and ask which ones feel right.'
     default:
       return ''
   }
@@ -720,18 +721,18 @@ function getIntermediateQuestionPrompt(state: InterviewState, terms: Record<stri
       return 'Question 1: What should this skill enable Claude to do? Ask the user to describe what they want.'
     case 'q1_followup':
       return 'Follow up on Q1: The user\'s capability answer was vague. Ask ONE clarifying question about scope or specifics.'
-    case 'q2_trigger':
-      return `Question 2: When should this skill trigger? Ask for 2-3 examples of what a user might say (${terms.triggerTerm}).`
-    case 'q2_followup':
-      return 'Follow up on Q2: The user gave only 1 trigger example. Ask for 1-2 more varied phrasings.'
     case 'q3_format':
-      return 'Question 3: What output format does the user expect? (markdown, code, JSON, etc.)'
+      return 'Question 2: What output format does the user expect? (markdown, code, JSON, etc.)'
     case 'q3_followup':
-      return 'Follow up on Q3: The format answer was vague. Ask if they want structured or freeform output.'
+      return 'Follow up on Q2: The format answer was vague. Ask if they want structured or freeform output.'
     case 'q4_testing':
-      return `Question 4: Should we set up ${terms.testTerm}? Suggest appropriate defaults based on the skill type. Explain WHY testing matters for this skill.`
+      return `Question 3: Should we set up ${terms.testTerm}? Suggest appropriate defaults based on the skill type. Explain WHY testing matters for this skill.`
     case 'edge_cases':
-      return 'Question 5: What edge cases or tricky scenarios should this skill handle? Ask about: unusual inputs, error conditions, boundary cases, and when the skill should explicitly refuse to act.'
+      return 'Question 4: What edge cases or tricky scenarios should this skill handle? Ask about: unusual inputs, error conditions, boundary cases, and when the skill should explicitly refuse to act.'
+    case 'q2_trigger':
+      return `Question 5 (final): When should this skill trigger? Ask for 2-3 examples of what a user might say (${terms.triggerTerm}).`
+    case 'q2_followup':
+      return 'Follow up on Q5: The user gave only 1 trigger example. Ask for 1-2 more varied phrasings.'
     default:
       return ''
   }
@@ -741,15 +742,12 @@ function getDefaultNextState(current: InterviewState, needsFollowUp: boolean, fo
   // Never do more than 1 follow-up per question
   const maxedFollowUps = followUpCount >= 4
 
+  // New order: capability → format → testing → edge_cases → trigger → confirm
   switch (current) {
     case 'greeting':
     case 'q1_capability':
-      return (needsFollowUp && !maxedFollowUps) ? 'q1_followup' : 'q2_trigger'
+      return (needsFollowUp && !maxedFollowUps) ? 'q1_followup' : 'q3_format'
     case 'q1_followup':
-      return 'q2_trigger'
-    case 'q2_trigger':
-      return (needsFollowUp && !maxedFollowUps) ? 'q2_followup' : 'q3_format'
-    case 'q2_followup':
       return 'q3_format'
     case 'q3_format':
       return (needsFollowUp && !maxedFollowUps) ? 'q3_followup' : 'q4_testing'
@@ -758,6 +756,10 @@ function getDefaultNextState(current: InterviewState, needsFollowUp: boolean, fo
     case 'q4_testing':
       return 'edge_cases'
     case 'edge_cases':
+      return 'q2_trigger'
+    case 'q2_trigger':
+      return (needsFollowUp && !maxedFollowUps) ? 'q2_followup' : 'confirm'
+    case 'q2_followup':
       return 'confirm'
     case 'confirm':
       return 'done'
@@ -788,14 +790,14 @@ function generateFallbackResponse(nextState: InterviewState, terms: Record<strin
   switch (nextState) {
     case 'q1_capability':
       return 'Let\'s create a skill! First, what should this skill enable Claude to do? Describe the core capability you\'re looking for.'
-    case 'q2_trigger':
-      return `Got it! Now, when should this skill activate? Give me 2-3 examples of what a user might say that should trigger this ${terms.skillTerm}.`
     case 'q3_format':
-      return 'Great examples! What output format do you expect? For example: markdown documentation, code files, JSON data, plain text, etc.'
+      return 'Got it! What output format do you expect? For example: markdown documentation, code files, JSON data, plain text, etc.'
     case 'q4_testing':
-      return `Almost done! Should we set up ${terms.testTerm} for this skill? I\'d recommend it — testing helps catch edge cases early. I can generate some automatically based on your answers. Want me to include them?`
+      return `Should we set up ${terms.testTerm} for this skill? I\'d recommend it — testing helps catch edge cases early. I can generate some automatically based on your answers. Want me to include them?`
     case 'edge_cases':
-      return 'Last question! Are there any tricky scenarios or edge cases this skill should handle? For example: unusual inputs, error conditions, or situations where it should refuse to act. This helps make the skill more robust.'
+      return 'Are there any tricky scenarios or edge cases this skill should handle? For example: unusual inputs, error conditions, or situations where it should refuse to act. This helps make the skill more robust.'
+    case 'q2_trigger':
+      return `Last question! When should this skill activate? Give me 2-3 examples of what a user might say that should trigger this ${terms.skillTerm}.`
     case 'confirm':
       return 'I\'ve captured all the key details. Please review the answers below — you can click any card to edit it. When everything looks good, click "Generate Skill" to proceed.'
     default:
@@ -807,14 +809,14 @@ function generateExpertFallbackResponse(nextState: InterviewState, terms: Record
   switch (nextState) {
     case 'q1_capability':
       return 'What capability should this skill provide? Include scope boundaries and key behaviors.'
-    case 'q2_trigger':
-      return `${terms.triggerTerm} patterns — give me 2-3 trigger examples plus any near-miss cases that should NOT trigger.`
     case 'q3_format':
       return 'Output format? Specify structure (schema/template), any validation constraints, and error output format.'
     case 'q4_testing':
       return `${terms.testTerm} config — I\'ll generate train/validation/holdout splits with semantic assertions. Want custom assertion dimensions or specific eval criteria?`
     case 'edge_cases':
       return 'Edge cases: malformed inputs, adversarial prompts, resource constraints, concurrent execution, explicit refusal conditions?'
+    case 'q2_trigger':
+      return `Final question: ${terms.triggerTerm} patterns — give me 2-3 trigger examples plus any near-miss cases that should NOT trigger.`
     case 'confirm':
       return 'Review the extracted answers below. Edit any card, then hit Generate.'
     default:
@@ -826,14 +828,14 @@ function generateBeginnerFallbackResponse(nextState: InterviewState, terms: Reco
   switch (nextState) {
     case 'q1_capability':
       return 'Let\'s build a skill together! First, describe what you\'d like this skill to help with — imagine you\'re explaining the task to a friend. What problem does it solve?'
-    case 'q2_trigger':
-      return `Nice! Now, what would someone type to use this skill? Think of it like a command or request — for example, "Help me write a haiku" or "Review this code". Give me 2-3 examples of what someone might say.`
     case 'q3_format':
       return 'What should the result look like? Should it be a paragraph of text, a step-by-step list, some code, a table, or something else? No wrong answers here!'
     case 'q4_testing':
       return `Great job so far! I\'d recommend we add some ${terms.testTerm} — these are sample inputs I\'ll check the skill against to make sure it works correctly. Think of it like a practice quiz. Want me to set those up for you?`
     case 'edge_cases':
-      return 'Last one! Can you think of any tricky situations? For example: What if someone asks for something slightly different? What if the input is really short or really long? Should the skill ever say "I can\'t help with that"?'
+      return 'Can you think of any tricky situations? For example: What if someone asks for something slightly different? What if the input is really short or really long? Should the skill ever say "I can\'t help with that"?'
+    case 'q2_trigger':
+      return `Last one! What would someone type to use this skill? Think of it like a command or request — for example, "Help me write a haiku" or "Review this code". Give me 2-3 examples of what someone might say.`
     case 'confirm':
       return 'I\'ve captured everything you said! Take a look at the answer cards below — you can click any one to edit it if something doesn\'t look right. When you\'re happy with everything, click "Generate Skill" to create your skill!'
     default:
@@ -938,7 +940,8 @@ export function generateGreeting(mode: string): string {
     hybrid: "Let's create a skill combining your experience and documentation! 5 quick questions to get started.",
   }
 
-  return modeIntros[mode] || modeIntros.scratch
+  const intro = modeIntros[mode] || modeIntros.scratch
+  return `${intro}\n\n**Question 1:** What should this skill enable Claude to do? Describe the core capability in your own words.`
 }
 
 /**

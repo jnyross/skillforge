@@ -10,7 +10,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Sidebar } from '@/components/sidebar'
 
 interface SkillRepo {
   id: string
@@ -108,10 +107,8 @@ export default function HomePage() {
   }
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar activePath="/" />
-      <main className="flex-1 p-8">
-        <div className="max-w-6xl mx-auto">
+    <div className="p-8">
+      <div className="max-w-6xl mx-auto">
           <div className="flex items-center justify-between mb-8">
             <div>
               <h1 className="text-3xl font-bold">Skill Repositories</h1>
@@ -299,8 +296,7 @@ export default function HomePage() {
               })}
             </div>
           )}
-        </div>
-      </main>
+      </div>
     </div>
   )
 }
