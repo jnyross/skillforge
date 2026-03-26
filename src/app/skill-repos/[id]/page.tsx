@@ -19,7 +19,6 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Sidebar } from '@/components/sidebar'
 import { useTechLevel, toTitleCase } from '@/lib/context/tech-level-context'
 
 interface VersionTagItem {
@@ -418,22 +417,16 @@ export default function SkillRepoPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen">
-        <Sidebar activePath="/" />
-        <main className="flex-1 p-8">
-          <div className="text-center py-12 text-muted-foreground">Loading...</div>
-        </main>
+      <div className="p-8">
+        <div className="text-center py-12 text-muted-foreground">Loading...</div>
       </div>
     )
   }
 
   if (!repo) {
     return (
-      <div className="flex min-h-screen">
-        <Sidebar activePath="/" />
-        <main className="flex-1 p-8">
-          <div className="text-center py-12 text-muted-foreground">Repo not found</div>
-        </main>
+      <div className="p-8">
+        <div className="text-center py-12 text-muted-foreground">Repo not found</div>
       </div>
     )
   }
@@ -505,10 +498,8 @@ export default function SkillRepoPage() {
     cat.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar activePath="/" />
-      <main className="flex-1 p-8">
-        <div className="max-w-6xl mx-auto">
+    <div className="p-8">
+      <div className="max-w-6xl mx-auto">
           {/* Header */}
           <div className="flex items-center gap-4 mb-6">
             <Link href="/">
@@ -1289,8 +1280,7 @@ export default function SkillRepoPage() {
               )}
             </div>
           </div>
-        </div>
-      </main>
+      </div>
     </div>
   )
 }

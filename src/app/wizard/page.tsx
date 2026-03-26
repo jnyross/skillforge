@@ -63,6 +63,11 @@ const ARTIFACT_TYPES = [
 ]
 
 const MODE_INFO: Record<WizardMode, { title: string; description: string; icon: React.ReactNode }> = {
+  scratch: {
+    title: 'From Scratch',
+    description: 'Describe your intent and let the wizard generate an initial skill draft with evals and benchmarks.',
+    icon: <Wand2 className="h-6 w-6" />,
+  },
   extract: {
     title: 'Extract from Task',
     description: 'Turn a successful hands-on Claude task into a reusable skill. Provide conversation transcripts, code outputs, and corrections.',
@@ -77,11 +82,6 @@ const MODE_INFO: Record<WizardMode, { title: string; description: string; icon: 
     title: 'Hybrid',
     description: 'Combine task extraction with artifact synthesis for the most grounded result.',
     icon: <TestTube className="h-6 w-6" />,
-  },
-  scratch: {
-    title: 'From Scratch',
-    description: 'Describe your intent and let the wizard generate an initial skill draft with evals and benchmarks.',
-    icon: <Wand2 className="h-6 w-6" />,
   },
 }
 
@@ -667,25 +667,47 @@ export default function WizardPage() {
 
       {/* Step 1: Mode Selection */}
       {step === 'mode' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {(Object.entries(MODE_INFO) as [WizardMode, typeof MODE_INFO[WizardMode]][]).map(([key, info]) => (
-            <button
-              key={key}
-              onClick={() => { setMode(key); setStep('intake') }}
-              className="border border-border rounded-lg p-6 hover:bg-accent transition-colors text-left group"
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                  {info.icon}
+        <div className="space-y-4">
+          {/* Hero card: From Scratch */}
+          <button
+            onClick={() => { setMode('scratch'); setStep('intake') }}
+            className="w-full border-2 border-primary/50 rounded-lg p-8 hover:bg-primary/5 transition-colors text-left group bg-primary/5"
+          >
+            <div className="flex items-center gap-4 mb-3">
+              <div className="p-3 bg-primary/20 rounded-lg text-primary">
+                <Wand2 className="h-8 w-8" />
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold">{MODE_INFO.scratch.title}</h3>
+                <p className="text-sm text-muted-foreground mt-1">{MODE_INFO.scratch.description}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-primary text-sm font-medium group-hover:gap-3 transition-all mt-2">
+              Get Started <ArrowRight className="h-4 w-4" />
+            </div>
+          </button>
+
+          {/* Other modes */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {(Object.entries(MODE_INFO) as [WizardMode, typeof MODE_INFO[WizardMode]][]).filter(([key]) => key !== 'scratch').map(([key, info]) => (
+              <button
+                key={key}
+                onClick={() => { setMode(key); setStep('intake') }}
+                className="border border-border rounded-lg p-6 hover:bg-accent transition-colors text-left group"
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-2 bg-primary/10 rounded-lg text-primary">
+                    {info.icon}
+                  </div>
+                  <h3 className="text-lg font-medium">{info.title}</h3>
                 </div>
-                <h3 className="text-lg font-medium">{info.title}</h3>
-              </div>
-              <p className="text-sm text-muted-foreground mb-4">{info.description}</p>
-              <div className="flex items-center gap-2 text-primary text-sm group-hover:gap-3 transition-all">
-                Start <ArrowRight className="h-4 w-4" />
-              </div>
-            </button>
-          ))}
+                <p className="text-sm text-muted-foreground mb-4">{info.description}</p>
+                <div className="flex items-center gap-2 text-primary text-sm group-hover:gap-3 transition-all">
+                  Start <ArrowRight className="h-4 w-4" />
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

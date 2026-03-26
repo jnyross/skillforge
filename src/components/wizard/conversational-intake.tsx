@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Loader2, User, Bot, ChevronDown, Gauge, Brain, GraduationCap, Sparkles } from 'lucide-react'
+import { Send, Loader2, User, Bot, ChevronDown, Gauge, Brain, GraduationCap, Sparkles, Upload, FileText, X } from 'lucide-react'
 import { AnswerCard } from './answer-card'
 import type {
   InterviewContext,
@@ -22,6 +22,8 @@ export function ConversationalIntake({ mode, onComplete, initialContext }: Conve
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [bulkContent, setBulkContent] = useState('')
+  const [showBulkUpload, setShowBulkUpload] = useState(false)
 
   // Advanced fields (collapsible)
   const [corrections, setCorrections] = useState('')
@@ -130,18 +132,25 @@ export function ConversationalIntake({ mode, onComplete, initialContext }: Conve
   function handleGenerate() {
     if (!context) return
     // Attach advanced options to context before completing
+    const additionalMessages: { role: 'user'; content: string; timestamp: string }[] = []
+    if (bulkContent) {
+      additionalMessages.push({
+        role: 'user' as const,
+        content: `[Bulk reference material]\n${bulkContent}`,
+        timestamp: new Date().toISOString(),
+      })
+    }
+    if (corrections || safetyConstraints || allowedTools) {
+      additionalMessages.push({
+        role: 'user' as const,
+        content: `[Advanced options] ${corrections ? `Corrections: ${corrections}. ` : ''}${safetyConstraints ? `Safety constraints: ${safetyConstraints}. ` : ''}${allowedTools ? `Allowed tools: ${allowedTools}.` : ''}`,
+        timestamp: new Date().toISOString(),
+      })
+    }
     const finalContext: InterviewContext = {
       ...context,
-      // Store advanced options in a message so they're preserved in transcript
-      messages: (corrections || safetyConstraints || allowedTools)
-        ? [
-            ...context.messages,
-            {
-              role: 'user' as const,
-              content: `[Advanced options] ${corrections ? `Corrections: ${corrections}. ` : ''}${safetyConstraints ? `Safety constraints: ${safetyConstraints}. ` : ''}${allowedTools ? `Allowed tools: ${allowedTools}.` : ''}`,
-              timestamp: new Date().toISOString(),
-            },
-          ]
+      messages: additionalMessages.length > 0
+        ? [...context.messages, ...additionalMessages]
         : context.messages,
     }
     onComplete(finalContext, {
@@ -201,7 +210,7 @@ export function ConversationalIntake({ mode, onComplete, initialContext }: Conve
 
       {/* Chat messages */}
       <div className="border border-border rounded-lg bg-card overflow-hidden">
-        <div className="max-h-[400px] overflow-y-auto p-4 space-y-4">
+        <div className="h-[500px] overflow-y-auto p-4 space-y-4">
           {context?.messages.map((msg, i) => (
             <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : ''}`}>
               {msg.role === 'assistant' && (
@@ -214,7 +223,7 @@ export function ConversationalIntake({ mode, onComplete, initialContext }: Conve
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-secondary'
               }`}>
-                {msg.content}
+                {msg.role === 'assistant' ? <InlineMarkdown content={msg.content} /> : msg.content}
               </div>
               {msg.role === 'user' && (
                 <div className="h-7 w-7 rounded-full bg-secondary flex items-center justify-center shrink-0">
@@ -250,9 +259,9 @@ export function ConversationalIntake({ mode, onComplete, initialContext }: Conve
                 value={inputValue}
                 onChange={e => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Type your answer..."
-                rows={1}
-                className="flex-1 px-3 py-2 bg-background border border-border rounded-md text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
+                placeholder="Type your answer... (Shift+Enter for new line)"
+                rows={4}
+                className="flex-1 px-3 py-2 bg-background border border-border rounded-md text-sm resize-y focus:outline-none focus:ring-2 focus:ring-primary/50"
                 disabled={isLoading}
               />
               <button
@@ -263,12 +272,54 @@ export function ConversationalIntake({ mode, onComplete, initialContext }: Conve
                 <Send className="h-4 w-4" />
               </button>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Question {currentQ} of {totalQ} — Press Enter to send, Shift+Enter for new line
-            </p>
+            <div className="flex items-center justify-between mt-1">
+              <p className="text-xs text-muted-foreground">
+                Question {currentQ} of {totalQ} — Press Enter to send, Shift+Enter for new line
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowBulkUpload(!showBulkUpload)}
+                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+              >
+                <Upload className="h-3 w-3" />
+                Paste bulk info
+              </button>
+            </div>
           </div>
         )}
       </div>
+
+      {/* Bulk upload/paste panel */}
+      {showBulkUpload && !isConfirming && (
+        <div className="border border-border rounded-lg p-4 bg-card space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-muted-foreground" />
+              <h4 className="text-sm font-medium">Bulk Information</h4>
+            </div>
+            <button onClick={() => setShowBulkUpload(false)} className="text-muted-foreground hover:text-foreground">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Paste documentation, runbooks, examples, or any relevant context. This will be included alongside your interview answers to give the wizard more to work with.
+          </p>
+          <textarea
+            value={bulkContent}
+            onChange={e => setBulkContent(e.target.value)}
+            placeholder="Paste your documentation, examples, API specs, style guides, or any reference material here..."
+            rows={8}
+            className="w-full px-3 py-2 bg-background border border-border rounded-md text-sm resize-y focus:outline-none focus:ring-2 focus:ring-primary/50 font-mono"
+          />
+          {bulkContent && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>{bulkContent.length.toLocaleString()} characters</span>
+              <span>•</span>
+              <span>{bulkContent.split('\n').length} lines</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Intent Confidence Score — shown at confirm stage */}
       {isConfirming && context?.intentConfidence && (
@@ -397,6 +448,62 @@ export function ConversationalIntake({ mode, onComplete, initialContext }: Conve
           </button>
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Inline Markdown Renderer (lightweight, for chat messages) ──────────────
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
+function InlineMarkdown({ content }: { content: string }) {
+  const lines = content.split('\n')
+  return (
+    <div className="space-y-1">
+      {lines.map((line, i) => {
+        // Heading
+        const headingMatch = line.match(/^(#{1,6})\s+(.+)/)
+        if (headingMatch) {
+          const level = headingMatch[1].length
+          const sizes = ['text-base font-bold', 'text-sm font-bold', 'text-sm font-semibold', 'text-xs font-semibold', 'text-xs font-medium', 'text-xs font-medium']
+          return <div key={i} className={sizes[level - 1] || sizes[0]}>{headingMatch[2]}</div>
+        }
+        // List item
+        if (/^[-*]\s/.test(line)) {
+          const escaped = escapeHtml(line.slice(2))
+          const formatted = escaped
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.+?)\*/g, '<em>$1</em>')
+            .replace(/`(.+?)`/g, '<code class="px-1 py-0.5 bg-background/50 rounded text-xs font-mono">$1</code>')
+          return <div key={i} className="pl-3" dangerouslySetInnerHTML={{ __html: `• ${formatted}` }} />
+        }
+        // Numbered list
+        const numMatch = line.match(/^(\d+)\.\s(.+)/)
+        if (numMatch) {
+          const escaped = escapeHtml(numMatch[2])
+          const formatted = escaped
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.+?)\*/g, '<em>$1</em>')
+            .replace(/`(.+?)`/g, '<code class="px-1 py-0.5 bg-background/50 rounded text-xs font-mono">$1</code>')
+          return <div key={i} className="pl-3" dangerouslySetInnerHTML={{ __html: `${numMatch[1]}. ${formatted}` }} />
+        }
+        // Empty line
+        if (!line.trim()) return <div key={i} className="h-1" />
+        // Regular text with inline formatting
+        const escaped = escapeHtml(line)
+        const formatted = escaped
+          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+          .replace(/\*(.+?)\*/g, '<em>$1</em>')
+          .replace(/`(.+?)`/g, '<code class="px-1 py-0.5 bg-background/50 rounded text-xs font-mono">$1</code>')
+        return <div key={i} dangerouslySetInnerHTML={{ __html: formatted }} />
+      })}
     </div>
   )
 }
